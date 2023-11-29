@@ -5,11 +5,12 @@ import http from 'http';
 import { Server, Socket } from 'socket.io';
 import * as Y from 'yjs';
 import logger from './utils/logger.ts';
-import { HOST, PORT } from './utils/config.ts';
+import { DISCOVERY_PORT, HOST, PORT } from './utils/config.ts';
 import { DocumentRegistration } from './types.ts';
-import discovery from './roles/discovery.ts';
+import Discovery from './roles/discovery.ts';
 
-discovery();
+const discovery = new Discovery();
+discovery.bind(DISCOVERY_PORT);
 
 const server = http.createServer((_req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });

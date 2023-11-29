@@ -38,3 +38,14 @@ export function getPriorityNumber(address: string, mask: string) {
     .join('');
   return parseInt(priorityNumberStr, 2);
 }
+
+export function validAddress(str: string) {
+  const m = str.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  return (
+    m != null &&
+    parseInt(m[1], 10) <= 255 &&
+    parseInt(m[2], 10) <= 255 &&
+    parseInt(m[3], 10) <= 255 &&
+    parseInt(m[4], 10) <= 255
+  );
+}

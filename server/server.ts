@@ -10,6 +10,9 @@ import { DocumentRegistration } from './types.ts';
 import Discovery from './roles/discovery.ts';
 
 const discovery = new Discovery();
+discovery.on('nodes', (nodes) => {
+  logger.info(`NODES EVENT ${JSON.stringify(nodes)}`);
+});
 discovery.bind(DISCOVERY_PORT);
 
 const server = http.createServer((_req, res) => {

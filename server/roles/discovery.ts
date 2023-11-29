@@ -40,9 +40,9 @@ export default class Discovery extends EventEmitter {
     this.#socket.on('listening', () => {
       const socketAddress = this.#socket.address();
       logger.info(
-        `ADDRESS: ${HOST}, MASK: ${NETWORK_INFO.netmask}, PRIORITY: ${PRIORITY}`
+        `address: ${HOST}, mask: ${NETWORK_INFO.netmask}, priority: ${PRIORITY}`
       );
-      logger.info(`DISCOVERY RUNNING ON PORT ${socketAddress.port}`);
+      logger.info(`discovery running on port ${socketAddress.port}`);
       // ... send a JOIN message every 5 seconds
       this.#socket.setBroadcast(true);
       this.#joinInterval = setInterval(() => {
@@ -54,14 +54,13 @@ export default class Discovery extends EventEmitter {
           NETWORK_INFO.broadcast
         );
       }, Discovery.SEND_INTERVAL);
-      logger.info(`NODES ${JSON.stringify(this.#nodes).toString()}`);
     });
 
     this.#socket.on('message', (msg, remote) => {
       const parsedMessage = Discovery.#parseDiscoveryMessage(msg);
       if (!parsedMessage.valid) {
         logger.error(
-          `INVALID MESSAGE FROM ${remote.address}:${
+          `invalid message from ${remote.address}:${
             remote.port
           } ('${msg.toString()}')`
         );
@@ -78,7 +77,7 @@ export default class Discovery extends EventEmitter {
           this.#handleAck(parsedMessage, remote);
           break;
         default:
-          logger.error(`Unknown message type ${parsedMessage.type}`);
+          logger.error(`unknown message type ${parsedMessage.type}`);
       }
     });
   }
@@ -102,7 +101,7 @@ export default class Discovery extends EventEmitter {
   static #parseNodeList(str: string): NodeList {
     const nodeStrArray: unknown = JSON.parse(str);
     if (!Array.isArray(nodeStrArray)) {
-      throw new Error(`Wrong type for NodeList - not an array ('${str}')`);
+      throw new Error(`wrong type for NodeList - not an array ('${str}')`);
     }
     const nodeList: NodeList = [];
     if (nodeStrArray.length > 0) {
@@ -125,6 +124,7 @@ export default class Discovery extends EventEmitter {
           address,
           priority: getPriorityNumber(address, NETWORK_INFO.netmask),
         });
+        this.emit('nodes', this.#nodes);
       }
     });
   }
@@ -137,7 +137,7 @@ export default class Discovery extends EventEmitter {
       !this.#nodes.find((node) => node.address === remote.address)
     ) {
       logger.info(
-        `RECEIVED VALID JOIN FROM ${remote.address}:${
+        `received JOIN from ${remote.address}:${
           remote.port
         } ('${parsedMsg.parts.join(' ')}')`
       );
@@ -145,6 +145,7 @@ export default class Discovery extends EventEmitter {
         address: remote.address,
         priority: getPriorityNumber(remote.address, NETWORK_INFO.netmask),
       });
+      this.emit('nodes', this.#nodes);
 
       if (!(remote.address in this.#helloInterval)) {
         const hello = Buffer.from(
@@ -161,8 +162,7 @@ export default class Discovery extends EventEmitter {
             remote.port,
             remote.address
           );
-          logger.info(`SENDING HELLO TO ${remote.address}:${remote.port}`);
-          logger.info(`NODES '${JSON.stringify(this.#nodes)}'`);
+          logger.info(`sending HELLO to ${remote.address}:${remote.port}`);
         }, Discovery.SEND_INTERVAL);
       }
     }
@@ -176,7 +176,11 @@ export default class Discovery extends EventEmitter {
       // stop sending JOIN messages
       clearInterval(this.#joinInterval);
 
-      logger.info(`RECEIVED HELLO ${JSON.stringify(parsedMsg.parts)}`);
+      logger.info(
+        `received HELLO from ${remote.address}:${remote.port} (${JSON.stringify(
+          parsedMsg.parts
+        )})`
+      );
 
       // add any new nodes in the message to the nodes array
       if (parsedMsg.parts[2]) {
@@ -192,12 +196,13 @@ export default class Discovery extends EventEmitter {
         ])}`
       );
       this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
-      logger.info(`SENDING ACK TO ${remote.address}:${remote.port}`);
-      logger.info(`NODES '${JSON.stringify(this.#nodes)}'`);
+      logger.info(`sending ACK to ${remote.address}:${remote.port}`);
     }
   }
 
   #handleAck(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
+    logger.info(`received ACK from ${remote.address}:${remote.port}`);
+
     // stop sending HELLO message to this address
     if (remote.address in this.#helloInterval) {
       clearInterval(this.#helloInterval[remote.address]);
@@ -209,6 +214,5 @@ export default class Discovery extends EventEmitter {
       const nodeList: NodeList = Discovery.#parseNodeList(parsedMsg.parts[2]);
       this.#addNodes(nodeList);
     }
-    logger.info(`handleAck: NODES ${JSON.stringify(this.#nodes).toString()}`);
   }
 }

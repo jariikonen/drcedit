@@ -162,7 +162,13 @@ export default class Discovery extends EventEmitter {
             remote.port,
             remote.address
           );
-          logger.info(`sending HELLO to ${remote.address}:${remote.port}`);
+          logger.info(
+            `sending HELLO to ${remote.address}:${
+              remote.port
+            } ('${JSON.stringify([
+              ...this.#nodes.map((node) => node.address),
+            ])}')`
+          );
         }, Discovery.SEND_INTERVAL);
       }
     }
@@ -196,12 +202,20 @@ export default class Discovery extends EventEmitter {
         ])}`
       );
       this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
-      logger.info(`sending ACK to ${remote.address}:${remote.port}`);
+      logger.info(
+        `sending ACK to ${remote.address}:${remote.port} ('${JSON.stringify([
+          ...this.#nodes.map((node) => node.address),
+        ])}')`
+      );
     }
   }
 
   #handleAck(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
-    logger.info(`received ACK from ${remote.address}:${remote.port}`);
+    logger.info(
+      `received ACK from ${remote.address}:${remote.port} ('${JSON.stringify(
+        parsedMsg.parts[2]
+      )}')`
+    );
 
     // stop sending HELLO message to this address
     if (remote.address in this.#helloInterval) {

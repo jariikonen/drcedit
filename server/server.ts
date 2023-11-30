@@ -16,9 +16,9 @@ const role: string | null = null;
 let editing: Editing | null = null;
 
 const discovery = new Discovery();
-discovery.on('nodes', (newNodes: NodeInfo[]) => {
+discovery.on('newNodes', (newNodes: NodeInfo[], source: string) => {
   nodes = [...newNodes];
-  logger.debug(`NODES EVENT ${JSON.stringify(nodes)}`);
+  logger.debug(`NEW NODES EVENT ${JSON.stringify(nodes)}, (${source})`);
 });
 discovery.bind(DISCOVERY_PORT);
 

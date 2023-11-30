@@ -16,9 +16,8 @@ import { getPriorityNumber, validAddress } from '../utils/networkinfo.ts';
 
 interface DiscoveryParseResult {
   type: string;
-  address: string;
-  valid: boolean;
   parts: string[];
+  nodeList?: NodeList;
 }
 
 export default class Discovery extends EventEmitter {
@@ -34,7 +33,7 @@ export default class Discovery extends EventEmitter {
     super();
     this.#socket = dgram.createSocket('udp4');
 
-    const joinMessage = Buffer.from(`JOIN ${HOST}`);
+    const joinMessage = Buffer.from('JOIN');
 
     // when socket is ready ...
     this.#socket.on('listening', () => {
@@ -61,13 +60,15 @@ export default class Discovery extends EventEmitter {
     });
 
     this.#socket.on('message', (msg, remote) => {
-      const parsedMessage = Discovery.#parseDiscoveryMessage(msg);
-      if (!parsedMessage.valid) {
+      let parsedMessage;
+      try {
+        parsedMessage = Discovery.#parseDiscoveryMessage(msg);
+      } catch (error) {
         logger.error(
-          `invalid message from ${remote.address}:${
-            remote.port
-          } ('${msg.toString()}')`
+          error,
+          `invalid message from ${remote.address}:${remote.port}`
         );
+        return;
       }
 
       switch (parsedMessage.type) {
@@ -93,61 +94,90 @@ export default class Discovery extends EventEmitter {
   static #parseDiscoveryMessage(msg: Buffer): DiscoveryParseResult {
     const msgSplit = msg.toString().split(' ');
     const type =
-      msgSplit[0] === 'JOIN' || msgSplit[0] === 'HELLO' || msgSplit[0] === 'ACK'
+      msgSplit[0] === 'JOIN' ||
+      msgSplit[0] === 'HELLO' ||
+      msgSplit[0] === 'ACK' ||
+      msgSplit[0] === 'ELECTION' ||
+      msgSplit[0] === 'COORDINATOR'
         ? msgSplit[0]
         : 'INVALID';
-    const address =
-      msgSplit[1] && validAddress(msgSplit[1]) ? msgSplit[1] : 'INVALID';
-    const valid = type !== 'INVALID' && address !== 'INVALID';
-    return { type, address, valid, parts: msgSplit };
+    if (type === 'INVALID') {
+      throw new Error(`invalid message type '${msgSplit[0]}'`);
+    }
+
+    if ((type === 'HELLO' || type === 'ACK') && msgSplit[1]) {
+      const nodeList = Discovery.#parseNodeList(msgSplit[1]);
+      return { type, parts: msgSplit, nodeList };
+    }
+    return { type, parts: msgSplit };
   }
 
   static #parseNodeList(str: string): NodeList {
     const nodeStrArray: unknown = JSON.parse(str);
     if (!Array.isArray(nodeStrArray)) {
-      throw new Error(`wrong type for NodeList - not an array ('${str}')`);
+      throw new Error(`wrong type for a node list - not an array '${str}'`);
     }
     const nodeList: NodeList = [];
     if (nodeStrArray.length > 0) {
       nodeStrArray.forEach((nodeStr) => {
-        if (typeof nodeStr === 'string' && validAddress(nodeStr)) {
-          nodeList.push(nodeStr);
+        if (typeof nodeStr !== 'string') {
+          throw new Error(
+            `wrong type of element on node list - not a string '${nodeStr}'`
+          );
         }
+        if (!validAddress(nodeStr)) {
+          throw new Error(
+            `wrong type of element on node list - not a valid IP address '${nodeStr}'`
+          );
+        }
+        nodeList.push(nodeStr);
       });
     }
     return nodeList;
   }
 
   #addNodes(nodeList: NodeList) {
+    let newNodes = false;
     nodeList.forEach((address) => {
       if (
         !this.#nodes.find((node) => node.address === address) &&
         address !== HOST
       ) {
+        newNodes = true;
         this.#nodes.push({
           address,
           priority: getPriorityNumber(address, NETWORK_INFO.netmask),
         });
-        this.emit('nodes', this.#nodes);
       }
     });
+    if (newNodes) {
+      this.emit('newNodes', this.#nodes, '#addNodes');
+    }
   }
 
   #handleJoin(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
+    if (remote.address !== HOST) {
+      logger.info(`received JOIN from ${remote.address}:${remote.port}`);
+    }
+    logger.debug(
+      `JOIN message content (received from ${remote.address}:${
+        remote.port
+      }): '${parsedMsg.parts.join(' ')}'`
+    );
+
     // add address to nodes array if message is from another node (not self) and
     // the node is not in the array already
     if (remote.address !== HOST && !(remote.address in this.#helloInterval)) {
-      logger.info(`received JOIN from ${remote.address}:${remote.port}`);
-      logger.debug(`received JOIN message: '${parsedMsg.parts.join(' ')}'`);
       this.#nodes.push({
         address: remote.address,
         priority: getPriorityNumber(remote.address, NETWORK_INFO.netmask),
       });
-      this.emit('nodes', this.#nodes);
+      this.emit('newNodes', this.#nodes, '#handleJoin');
 
+      // and start sending HELLO messages to that node
       if (!(remote.address in this.#helloInterval)) {
         const hello = Buffer.from(
-          `HELLO ${HOST} ${JSON.stringify([
+          `HELLO ${JSON.stringify([
             ...this.#nodes.map((node) => node.address),
             HOST,
           ])}`
@@ -161,7 +191,9 @@ export default class Discovery extends EventEmitter {
             remote.address
           );
           logger.info(`sending HELLO to ${remote.address}:${remote.port}`);
-          logger.debug(`sent HELLO message: '${hello.toString('utf-8')}'`);
+          logger.debug(
+            `HELLO message content (sent): '${hello.toString('utf-8')}'`
+          );
         }, DISCOVERY_MESSAGE_INTERVAL);
         setTimeout(() => {
           clearInterval(this.#helloInterval[remote.address]);
@@ -180,17 +212,20 @@ export default class Discovery extends EventEmitter {
       clearInterval(this.#joinInterval);
 
       logger.info(`received HELLO from ${remote.address}:${remote.port}`);
-      logger.debug(`received HELLO message: '${parsedMsg.parts.join(' ')}'`);
+      logger.debug(
+        `HELLO message content (received from ${remote.address}:${
+          remote.port
+        }): '${parsedMsg.parts.join(' ')}'`
+      );
 
       // add any new nodes in the message to the nodes array
-      if (parsedMsg.parts[2]) {
-        const nodeList: NodeList = Discovery.#parseNodeList(parsedMsg.parts[2]);
-        this.#addNodes(nodeList);
+      if (parsedMsg.nodeList) {
+        this.#addNodes(parsedMsg.nodeList);
       }
 
       // send an ACK message
       const ack = Buffer.from(
-        `ACK ${HOST} ${JSON.stringify([
+        `ACK ${JSON.stringify([
           ...this.#nodes.map((node) => node.address),
           HOST,
         ])}`
@@ -203,7 +238,11 @@ export default class Discovery extends EventEmitter {
 
   #handleAck(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
     logger.info(`received ACK from ${remote.address}:${remote.port}`);
-    logger.debug(`received ACK message: '${parsedMsg.parts.join(' ')}'`);
+    logger.debug(
+      `received ACK message (from ${remote.address}:${
+        remote.port
+      }): '${parsedMsg.parts.join(' ')}'`
+    );
 
     // stop sending HELLO message to this address
     if (remote.address in this.#helloInterval) {
@@ -212,9 +251,8 @@ export default class Discovery extends EventEmitter {
     }
 
     // add any new nodes in message to nodes array
-    if (parsedMsg.parts[2]) {
-      const nodeList: NodeList = Discovery.#parseNodeList(parsedMsg.parts[2]);
-      this.#addNodes(nodeList);
+    if (parsedMsg.nodeList) {
+      this.#addNodes(parsedMsg.nodeList);
     }
   }
 }

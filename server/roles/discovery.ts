@@ -6,6 +6,8 @@ import {
   NETWORK_INFO,
   HOST,
   DISCOVERY_PORT,
+  DISCOVERY_MESSAGE_INTERVAL,
+  DISCOVERY_HELLO_TIMEOUT,
   PRIORITY,
 } from '../utils/config.ts';
 import logger from '../utils/logger.ts';
@@ -20,8 +22,6 @@ interface DiscoveryParseResult {
 }
 
 export default class Discovery extends EventEmitter {
-  static SEND_INTERVAL = 5000;
-
   #nodes: NodeInfo[] = [];
 
   #joinInterval: NodeJS.Timeout | null = null;
@@ -57,7 +57,7 @@ export default class Discovery extends EventEmitter {
           `sending JOIN to ${NETWORK_INFO.broadcast}:${DISCOVERY_PORT} (broadcast)`
         );
         logger.debug(`sent JOIN message: '${joinMessage.toString('utf-8')}'`);
-      }, Discovery.SEND_INTERVAL);
+      }, DISCOVERY_MESSAGE_INTERVAL);
     });
 
     this.#socket.on('message', (msg, remote) => {
@@ -136,10 +136,7 @@ export default class Discovery extends EventEmitter {
   #handleJoin(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
     // add address to nodes array if message is from another node (not self) and
     // the node is not in the array already
-    if (
-      remote.address !== HOST &&
-      !this.#nodes.find((node) => node.address === remote.address)
-    ) {
+    if (remote.address !== HOST && !(remote.address in this.#helloInterval)) {
       logger.info(`received JOIN from ${remote.address}:${remote.port}`);
       logger.debug(`received JOIN message: '${parsedMsg.parts.join(' ')}'`);
       this.#nodes.push({
@@ -165,7 +162,11 @@ export default class Discovery extends EventEmitter {
           );
           logger.info(`sending HELLO to ${remote.address}:${remote.port}`);
           logger.debug(`sent HELLO message: '${hello.toString('utf-8')}'`);
-        }, Discovery.SEND_INTERVAL);
+        }, DISCOVERY_MESSAGE_INTERVAL);
+        setTimeout(() => {
+          clearInterval(this.#helloInterval[remote.address]);
+          delete this.#helloInterval[remote.address];
+        }, DISCOVERY_HELLO_TIMEOUT);
       }
     }
   }

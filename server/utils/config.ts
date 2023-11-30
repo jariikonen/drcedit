@@ -8,4 +8,12 @@ export const DISCOVERY_PORT = parseInt(
   `${process.env.DISCOVERY_PORT ?? 4321}`,
   10
 );
+export const DISCOVERY_MESSAGE_INTERVAL = parseInt(
+  `${process.env.DISCOVERY_MESSAGE_INTERVAL ?? 1000}`,
+  10
+);
+export const DISCOVERY_HELLO_TIMEOUT = parseInt(
+  `${process.env.DISCOVERY_HELLO_TIMEOUT ?? 5500}`,
+  10
+);
 export const PRIORITY = getPriorityNumber(HOST, NETWORK_INFO.netmask);

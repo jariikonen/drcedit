@@ -18,7 +18,7 @@ let editing: Editing | null = null;
 const discovery = new Discovery();
 discovery.on('nodes', (newNodes: NodeInfo[]) => {
   nodes = [...newNodes];
-  logger.info(`NODES EVENT ${JSON.stringify(nodes)}`);
+  logger.debug(`NODES EVENT ${JSON.stringify(nodes)}`);
 });
 discovery.bind(DISCOVERY_PORT);
 

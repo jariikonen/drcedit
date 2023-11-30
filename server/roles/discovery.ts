@@ -53,6 +53,10 @@ export default class Discovery extends EventEmitter {
           DISCOVERY_PORT,
           NETWORK_INFO.broadcast
         );
+        logger.info(
+          `sending JOIN to ${NETWORK_INFO.broadcast}:${DISCOVERY_PORT} (broadcast)`
+        );
+        logger.debug(`sent JOIN message: '${joinMessage.toString('utf-8')}'`);
       }, Discovery.SEND_INTERVAL);
     });
 
@@ -136,11 +140,8 @@ export default class Discovery extends EventEmitter {
       remote.address !== HOST &&
       !this.#nodes.find((node) => node.address === remote.address)
     ) {
-      logger.info(
-        `received JOIN from ${remote.address}:${
-          remote.port
-        } ('${parsedMsg.parts.join(' ')}')`
-      );
+      logger.info(`received JOIN from ${remote.address}:${remote.port}`);
+      logger.debug(`received JOIN message: '${parsedMsg.parts.join(' ')}'`);
       this.#nodes.push({
         address: remote.address,
         priority: getPriorityNumber(remote.address, NETWORK_INFO.netmask),
@@ -162,13 +163,8 @@ export default class Discovery extends EventEmitter {
             remote.port,
             remote.address
           );
-          logger.info(
-            `sending HELLO to ${remote.address}:${
-              remote.port
-            } ('${JSON.stringify([
-              ...this.#nodes.map((node) => node.address),
-            ])}')`
-          );
+          logger.info(`sending HELLO to ${remote.address}:${remote.port}`);
+          logger.debug(`sent HELLO message: '${hello.toString('utf-8')}'`);
         }, Discovery.SEND_INTERVAL);
       }
     }
@@ -182,11 +178,8 @@ export default class Discovery extends EventEmitter {
       // stop sending JOIN messages
       clearInterval(this.#joinInterval);
 
-      logger.info(
-        `received HELLO from ${remote.address}:${remote.port} (${JSON.stringify(
-          parsedMsg.parts
-        )})`
-      );
+      logger.info(`received HELLO from ${remote.address}:${remote.port}`);
+      logger.debug(`received HELLO message: '${parsedMsg.parts.join(' ')}'`);
 
       // add any new nodes in the message to the nodes array
       if (parsedMsg.parts[2]) {
@@ -202,20 +195,14 @@ export default class Discovery extends EventEmitter {
         ])}`
       );
       this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
-      logger.info(
-        `sending ACK to ${remote.address}:${remote.port} ('${JSON.stringify([
-          ...this.#nodes.map((node) => node.address),
-        ])}')`
-      );
+      logger.info(`sending ACK to ${remote.address}:${remote.port}`);
+      logger.debug(`sent ACK message: '${ack.toString('utf-8')}'`);
     }
   }
 
   #handleAck(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
-    logger.info(
-      `received ACK from ${remote.address}:${remote.port} ('${JSON.stringify(
-        parsedMsg.parts[2]
-      )}')`
-    );
+    logger.info(`received ACK from ${remote.address}:${remote.port}`);
+    logger.debug(`received ACK message: '${parsedMsg.parts.join(' ')}'`);
 
     // stop sending HELLO message to this address
     if (remote.address in this.#helloInterval) {

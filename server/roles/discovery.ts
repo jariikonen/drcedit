@@ -20,6 +20,58 @@ interface DiscoveryParseResult {
   nodeList?: NodeList;
 }
 
+/**
+ * Discovery server is takes care of finding other nodes within the same
+ * subnetwork. It sends JOIN messages as UDP datagrams to the broadcast address
+ * of the subnetwork and listens for incomming messages. Nodes should respond
+ * to JOIN with a HELLO message which contains a list of nodes the sender
+ * currently knows. HELLO should then be responded with an ACK message also
+ * containing a list of nodes that the sender knows at that moment.
+ *
+ * Server stops sending the JOIN messages after receiving the first HELLO, but
+ * continues listening for incoming messages. After the first HELLO it knows at
+ * least one other node in the network and is able to add more nodes to its list
+ * when it receives more JOIN messages.
+ *
+ * When receiving a JOIN message the server will try to send a HELLO message
+ * to the node as long as it gets a reply (ACK) or it times out. The timeout
+ * interval can be set using the config variable DISCOVERY_HELLO_TIMEOUT.
+ *
+ * When the server receives information about new nodes it will add them to
+ * its nodes array and emit a 'newNodes' event. The nodes array is passed as
+ * event parameter together with a string indicating which method the event
+ * was sent from.
+ *
+ * When receiving information about new nodes the server also starts a leader
+ * election process using the Bully algorithm, after waiting for a short time
+ * for new messages to arrive. This wait timeout can be set using the config
+ * variable DISCOVERY_PRE-ELECTION_TIMEOUT. The host identifier part of the
+ * nodes' IP address is used as the priority number in the election process.
+ * If the node does not have the highest priority of the nodes it knows, it
+ * sends an ELECTION message to the nodes that have a higher priority. If those
+ * nodes are alive they respond with OK message. OK messages are sent as long
+ * as the node receives an ACK response to it. If the node, however, has the
+ * highest priority of the nodes it knows, it sends a COORDINATOR message to
+ * all the other nodes using the broadcast address. Along the message it sends
+ * a list of the nodes it knows. The list also includes information about
+ * new roles of the nodes - one of the nodes is assigned as a message broker
+ * and another as a gateway.
+ *
+ * By sending the COORDINATOR message the highest priority node "bullies" the
+ * the other nodes to accept its leading role. They don't, however, accept it
+ * without checking that the node really has the highest priority by finding
+ * out the priority number themselves from the nodes' IP address and the
+ * network mask. If the node really has the highest priority, the other nodes
+ * stop the election process and respond with ACK.
+ *
+ * The node elected as the leader takes on the role of message broker itself,
+ * and assigns the role of gateway to the node with the smallest priority. It
+ * communicates both of these actions in the COORDINATOR message. If the
+ * gateway is assumed to have failed, the leader/message broker can assign a
+ * new gateway using an ASSIGN message.
+ *
+ * Server is started by calling the bind method, which binds it to a port.
+ */
 export default class Discovery extends EventEmitter {
   #nodes: NodeInfo[] = [];
 
@@ -42,7 +94,8 @@ export default class Discovery extends EventEmitter {
         `address: ${HOST}, mask: ${NETWORK_INFO.netmask}, priority: ${PRIORITY}`
       );
       logger.info(`discovery running on port ${socketAddress.port}`);
-      // ... send a JOIN message every 5 seconds
+
+      // ... send a JOIN message at intervals
       this.#socket.setBroadcast(true);
       this.#joinInterval = setInterval(() => {
         this.#socket.send(
@@ -59,6 +112,7 @@ export default class Discovery extends EventEmitter {
       }, DISCOVERY_MESSAGE_INTERVAL);
     });
 
+    // and add event listener to handle received messages
     this.#socket.on('message', (msg, remote) => {
       let parsedMessage;
       try {
@@ -87,6 +141,10 @@ export default class Discovery extends EventEmitter {
     });
   }
 
+  /**
+   * Binds the Discovery server to a port and starts the server.
+   * @param port The port number to listen on.
+   */
   bind(port: number) {
     this.#socket?.bind(port);
   }
@@ -98,7 +156,8 @@ export default class Discovery extends EventEmitter {
       msgSplit[0] === 'HELLO' ||
       msgSplit[0] === 'ACK' ||
       msgSplit[0] === 'ELECTION' ||
-      msgSplit[0] === 'COORDINATOR'
+      msgSplit[0] === 'COORDINATOR' ||
+      msgSplit[0] === 'ASSIGN'
         ? msgSplit[0]
         : 'INVALID';
     if (type === 'INVALID') {

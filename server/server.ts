@@ -11,14 +11,17 @@ import Discovery from './roles/discovery.ts';
 import Editing from './roles/editing.ts';
 import { NodeInfo } from './types.ts';
 
-let nodes: NodeInfo[] = [];
 const role: string | null = null;
 let editing: Editing | null = null;
 
 const discovery = new Discovery();
-discovery.on('newNodes', (newNodes: NodeInfo[], source: string) => {
-  nodes = [...newNodes];
-  logger.debug(`NEW NODES EVENT: ${JSON.stringify(nodes)}, (${source})`);
+discovery.on('newNodes', (newNodes: NodeInfo[]) => {
+  logger.info(`NEW NODES EVENT: ${JSON.stringify(newNodes)}`);
+});
+discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
+  logger.info(`NEW ROLES EVENT (${source}): ${JSON.stringify(newNodes)}`);
+  const roles = newNodes.find((node) => node.address === HOST)?.roles;
+  logger.info(`assuming new role(s): ${JSON.stringify(roles)}`);
 });
 discovery.bind(DISCOVERY_PORT);
 

@@ -718,8 +718,6 @@ export default class Discovery extends EventEmitter {
       );
     }
 
-    this.#stopPreElectionTimeout();
-
     // respond with OK
     const ok = Buffer.from('OK');
     this.#socket.send(ok, 0, ok.length, remote.port, remote.address);

@@ -731,6 +731,7 @@ export default class Discovery extends EventEmitter {
     if (this.#preElectionTimeout) {
       clearTimeout(this.#preElectionTimeout);
       this.#preElectionTimeout = null;
+      logger.info('cleared the pre-election timeout');
     }
   }
 

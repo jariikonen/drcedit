@@ -20,10 +20,19 @@ const discovery = new Discovery();
 discovery.on('newNodes', (newNodes: NodeInfo[]) => {
   logger.info(`NEW NODES EVENT: ${JSON.stringify(newNodes)}`);
 });
+
 discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
   logger.info(`NEW ROLES EVENT (${source}): ${JSON.stringify(newNodes)}`);
+
   const roles = newNodes.find((node) => node.address === HOST)?.roles;
   logger.info(`assuming new role(s): ${JSON.stringify(roles)}`);
+
+  // close previously opened Messaging instance
+  if (messaging) {
+    messaging.close();
+  }
+
+  // and start a new one as a broker or a client
   if (roles?.includes('MESSAGE_BROKER')) {
     messaging = new Messaging(true);
   } else {
@@ -31,8 +40,13 @@ discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
       node.roles.includes('MESSAGE_BROKER')
     );
     messaging = new Messaging(false, brokerNode?.address);
+    messaging.join('testiHuone');
+    messaging.sendToRoom(
+      'testiHuone',
+      'testiViesti',
+      `testiviesti ${HOST}:ilta`
+    );
   }
-  logger.info(messaging);
 });
 discovery.bind(DISCOVERY_PORT);
 

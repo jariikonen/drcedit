@@ -13,15 +13,15 @@ export const DISCOVERY_PORT = parseInt(
   10
 );
 export const DISCOVERY_MESSAGE_INTERVAL = parseInt(
-  `${process.env.DISCOVERY_MESSAGE_INTERVAL ?? 1000}`,
+  `${process.env.DISCOVERY_MESSAGE_INTERVAL ?? 100}`,
   10
 );
 export const DISCOVERY_MESSAGE_TIMEOUT = parseInt(
-  `${process.env.DISCOVERY_MESSAGE_TIMEOUT ?? 5500}`,
+  `${process.env.DISCOVERY_MESSAGE_TIMEOUT ?? 550}`,
   10
 );
 export const DISCOVERY_PREELECTION_TIMEOUT = parseInt(
-  `${process.env.DISCOVERY_PREELECTION_TIMEOUT ?? 5500}`,
+  `${process.env.DISCOVERY_PREELECTION_TIMEOUT ?? 550}`,
   10
 );
 export const PRIORITY = getPriorityNumber(HOST, NETWORK_INFO.netmask);

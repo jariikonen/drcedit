@@ -2,9 +2,9 @@
 
 import logger from './utils/logger.ts';
 import { HOST } from './utils/config.ts';
-import Discovery from './roles/Discovery.ts';
-import Messaging from './roles/Messaging.ts';
-import Storage from './roles/Storage.ts';
+import Discovery from './services/Discovery.ts';
+import Messaging from './services/Messaging.ts';
+import Storage from './services/Storage.ts';
 import { NodeInfo } from './types.ts';
 
 const log = logger.child({ caller: 'server' });

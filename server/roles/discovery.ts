@@ -20,6 +20,8 @@ import {
 } from '../types.ts';
 import { getPriorityNumber, validAddress } from '../utils/networkinfo.ts';
 
+const log = logger.child({ module: 'Discovery' });
+
 type DiscoveryMessageType =
   | 'JOIN'
   | 'HELLO'
@@ -129,10 +131,10 @@ export default class Discovery extends EventEmitter {
     // when socket is ready ...
     this.#socket.on('listening', () => {
       const socketAddress = this.#socket.address();
-      logger.info(
+      log.info(
         `address: ${HOST}, mask: ${NETWORK_INFO.netmask}, priority: ${PRIORITY}`
       );
-      logger.info(`discovery running on port ${socketAddress.port}`);
+      log.info(`discovery running on port ${socketAddress.port}`);
 
       // ... send a JOIN message at intervals
       this.#socket.setBroadcast(true);
@@ -144,10 +146,10 @@ export default class Discovery extends EventEmitter {
           DISCOVERY_PORT,
           NETWORK_INFO.broadcast
         );
-        logger.info(
+        log.info(
           `sending JOIN to ${NETWORK_INFO.broadcast}:${DISCOVERY_PORT} (broadcast)`
         );
-        logger.debug(
+        log.debug(
           `JOIN message content (sent): '${joinMessage.toString('utf-8')}'`
         );
       }, DISCOVERY_MESSAGE_INTERVAL);
@@ -155,14 +157,14 @@ export default class Discovery extends EventEmitter {
 
     // and add event listener to handle received messages
     this.#socket.on('message', (msg, remote) => {
-      logger.debug(
+      log.debug(
         `message from ${remote.address}:${remote.port}: ${msg.toString()}`
       );
       let parsedMessage;
       try {
         parsedMessage = Discovery.#parseDiscoveryMessage(msg);
       } catch (error) {
-        logger.error(
+        log.error(
           error,
           `invalid message from ${remote.address}:${remote.port}`
         );
@@ -190,18 +192,16 @@ export default class Discovery extends EventEmitter {
             this.#handleCoordinator(parsedMessage, remote);
             break;
           case 'ASSIGN':
-            logger.info(
+            log.info(
               `received an ASSIGN message from ${remote.address}:${remote.port}`
             );
-            logger.error(
-              'ASSIGN message handling has not been implemented yet'
-            );
+            log.error('ASSIGN message handling has not been implemented yet');
             break;
           default:
             throw new Error('ran out of message types');
         }
       } catch (error) {
-        logger.error(
+        log.error(
           error,
           `invalid ${parsedMessage.type} message from ${remote.address}:${remote.port}`
         );
@@ -391,7 +391,7 @@ export default class Discovery extends EventEmitter {
         clearTimeout(this.#preElectionTimeout);
       }
       this.#preElectionTimeout = setTimeout(() => {
-        logger.info('pre-election timeout expired');
+        log.info('pre-election timeout expired');
         this.#startElection();
       }, DISCOVERY_PREELECTION_TIMEOUT);
       this.emit('newNodes', [...this.#nodes]);
@@ -400,9 +400,9 @@ export default class Discovery extends EventEmitter {
 
   #handleJoin(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
     if (remote.address !== HOST) {
-      logger.info(`received JOIN from ${remote.address}:${remote.port}`);
+      log.info(`received JOIN from ${remote.address}:${remote.port}`);
     }
-    logger.debug(
+    log.debug(
       `JOIN message content (received from ${remote.address}:${
         remote.port
       }): '${parsedMsg.parts.join(' ')}'`
@@ -421,7 +421,7 @@ export default class Discovery extends EventEmitter {
             ...this.#nodes.map((node) => node.address),
           ])}`
         );
-        logger.debug(
+        log.debug(
           `start sending HELLO messages to ${remote.address}:${remote.port}`
         );
         this.#helloInterval[remote.address] = setInterval(() => {
@@ -432,14 +432,14 @@ export default class Discovery extends EventEmitter {
             remote.port,
             remote.address
           );
-          logger.info(`sending HELLO to ${remote.address}:${remote.port}`);
-          logger.debug(
+          log.info(`sending HELLO to ${remote.address}:${remote.port}`);
+          log.debug(
             `HELLO message content (sent): '${hello.toString('utf-8')}'`
           );
         }, DISCOVERY_MESSAGE_INTERVAL);
         // stop sending messages after a timeout
         this.#helloTimeout[remote.address] = setTimeout(() => {
-          logger.debug(
+          log.debug(
             `sending HELLO messages to ${remote.address}:${remote.port} TIMED OUT`
           );
           clearInterval(this.#helloInterval[remote.address]);
@@ -453,8 +453,8 @@ export default class Discovery extends EventEmitter {
     parsedMsg: DiscoveryParseResult,
     remote: dgram.RemoteInfo
   ): void {
-    logger.info(`received HELLO from ${remote.address}:${remote.port}`);
-    logger.debug(
+    log.info(`received HELLO from ${remote.address}:${remote.port}`);
+    log.debug(
       `HELLO message content (received from ${remote.address}:${
         remote.port
       }): '${parsedMsg.parts.join(' ')}'`
@@ -475,10 +475,8 @@ export default class Discovery extends EventEmitter {
       ])}`
     );
     this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
-    logger.info(`sending ACK HELLO to ${remote.address}:${remote.port}`);
-    logger.debug(
-      `ACK HELLO message content (sent): '${ack.toString('utf-8')}'`
-    );
+    log.info(`sending ACK HELLO to ${remote.address}:${remote.port}`);
+    log.debug(`ACK HELLO message content (sent): '${ack.toString('utf-8')}'`);
 
     // stop sending HELLO messages to this node
     if (this.#helloInterval[remote.address]) {
@@ -490,7 +488,7 @@ export default class Discovery extends EventEmitter {
     if (this.#joinInterval) {
       clearInterval(this.#joinInterval);
       this.#joinInterval = null;
-      logger.info('stopped sending JOIN messages');
+      log.info('stopped sending JOIN messages');
     }
   }
 
@@ -498,24 +496,22 @@ export default class Discovery extends EventEmitter {
     if (this.#helloInterval[remote.address]) {
       clearInterval(this.#helloInterval[remote.address]);
       delete this.#helloInterval[remote.address];
-      logger.info(
+      log.info(
         `stopped sending HELLO messages to ${remote.address}:${remote.port}`
       );
     }
     if (this.#helloTimeout[remote.address]) {
       clearTimeout(this.#helloTimeout[remote.address]);
       delete this.#helloTimeout[remote.address];
-      logger.info(
-        `cleared timeout for HELLO to ${remote.address}:${remote.port}`
-      );
+      log.info(`cleared timeout for HELLO to ${remote.address}:${remote.port}`);
     }
   }
 
   #handleAck(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
-    logger.info(
+    log.info(
       `received ACK ${parsedMsg.responseType} from ${remote.address}:${remote.port}`
     );
-    logger.debug(
+    log.debug(
       `received ACK ${parsedMsg.responseType} message (from ${remote.address}:${
         remote.port
       }): '${parsedMsg.parts.join(' ')}'`
@@ -541,7 +537,7 @@ export default class Discovery extends EventEmitter {
     if (remote.address in this.#helloInterval) {
       clearInterval(this.#helloInterval[remote.address]);
       delete this.#helloInterval[remote.address];
-      logger.info(
+      log.info(
         `stopped sending HELLO messages to ${remote.address}:${remote.port}`
       );
     }
@@ -564,7 +560,7 @@ export default class Discovery extends EventEmitter {
   }
 
   #startElection() {
-    logger.info('starting an ELECTION PROCESS');
+    log.info('starting an ELECTION PROCESS');
 
     // initialize state
     this.#receivedOK = false;
@@ -574,7 +570,7 @@ export default class Discovery extends EventEmitter {
     );
     // HOST does not have the highest priority
     if (higherPriorities.length > 0) {
-      logger.info(
+      log.info(
         `${HOST} has priority ${PRIORITY}, ${
           higherPriorities.length
         } node(s) with higher priority: ${JSON.stringify(higherPriorities)}`
@@ -584,7 +580,7 @@ export default class Discovery extends EventEmitter {
     }
     // HOST has the highest priority
     else {
-      logger.info(
+      log.info(
         `${HOST} has the HIGHEST PRIORITY (${PRIORITY}) (nodes: ${JSON.stringify(
           [...this.#nodes]
         )})`
@@ -605,21 +601,21 @@ export default class Discovery extends EventEmitter {
           DISCOVERY_PORT,
           node.address
         );
-        logger.info(`sending ELECTION to ${node.address}:${DISCOVERY_PORT}`);
-        logger.debug(
+        log.info(`sending ELECTION to ${node.address}:${DISCOVERY_PORT}`);
+        log.debug(
           `ELECTION message content (sent): '${election.toString('utf-8')}'`
         );
       }, DISCOVERY_MESSAGE_INTERVAL);
 
       // stop sending messages after a timeout
       this.#electionTimeout[node.address] = setTimeout(() => {
-        logger.info(`ELECTION message to ${node.address} timed out`);
+        log.info(`ELECTION message to ${node.address} timed out`);
         clearInterval(this.#electionInterval[node.address]);
         delete this.#electionInterval[node.address];
 
         // since the node seems to be unresponsive, remove it from list of
         // active nodes
-        logger.info(`removing ${node.address} from nodes as unresponsive`);
+        log.info(`removing ${node.address} from nodes as unresponsive`);
         const nodeIndex = this.#nodes.findIndex(
           (n) => n.address === node.address
         );
@@ -660,7 +656,7 @@ export default class Discovery extends EventEmitter {
 
     // update nodes array and emit a NEW ROLES event
     this.#nodes = nodes;
-    logger.debug(`updated the roles: ${JSON.stringify(this.#nodes)}`);
+    log.debug(`updated the roles: ${JSON.stringify(this.#nodes)}`);
     this.emit('newRoles', [...this.#nodes], '#setRoles');
   }
 
@@ -688,8 +684,8 @@ export default class Discovery extends EventEmitter {
           DISCOVERY_PORT,
           node.address
         );
-        logger.info(`sending COORDINATOR to ${node.address}:${DISCOVERY_PORT}`);
-        logger.debug(
+        log.info(`sending COORDINATOR to ${node.address}:${DISCOVERY_PORT}`);
+        log.debug(
           `COORDINATOR message content (sent): '${coordinator.toString(
             'utf-8'
           )}'`
@@ -705,7 +701,7 @@ export default class Discovery extends EventEmitter {
   }
 
   #handleElection(remote: dgram.RemoteInfo): void {
-    logger.info(
+    log.info(
       `received an ELECTION message from ${remote.address}:${remote.port}`
     );
     const remotePriority = getPriorityNumber(
@@ -721,22 +717,22 @@ export default class Discovery extends EventEmitter {
     // respond with OK
     const ok = Buffer.from('OK');
     this.#socket.send(ok, 0, ok.length, remote.port, remote.address);
-    logger.info(`sending OK to ${remote.address}:${remote.port}`);
-    logger.debug(`OK message content (sent): '${ok.toString('utf-8')}'`);
+    log.info(`sending OK to ${remote.address}:${remote.port}`);
+    log.debug(`OK message content (sent): '${ok.toString('utf-8')}'`);
   }
 
   #stopPreElectionTimeout() {
     if (this.#preElectionTimeout) {
       clearTimeout(this.#preElectionTimeout);
       this.#preElectionTimeout = null;
-      logger.info('cleared the pre-election timeout');
+      log.info('cleared the pre-election timeout');
     }
   }
 
   #handleOK(remote: dgram.RemoteInfo): void {
     this.#receivedOK = true;
 
-    logger.info(`received an OK message from ${remote.address}:${remote.port}`);
+    log.info(`received an OK message from ${remote.address}:${remote.port}`);
 
     // if the message is valid, i.e., an ELECTION message was sent to this node
     // previously
@@ -756,14 +752,14 @@ export default class Discovery extends EventEmitter {
       clearInterval(this.#electionInterval[key]);
       delete this.#electionInterval[key];
     });
-    logger.debug(this.#electionInterval, 'stopped sending ELECTION messages');
+    log.debug(this.#electionInterval, 'stopped sending ELECTION messages');
 
     // and stop excpecting a response to previously sent ELECTION messages
     Object.keys(this.#electionTimeout).forEach((key) => {
       clearTimeout(this.#electionTimeout[key]);
       delete this.#electionTimeout[key];
     });
-    logger.debug(
+    log.debug(
       this.#electionTimeout,
       'stopped waiting a response to previously sent ELECTION messages'
     );
@@ -773,10 +769,10 @@ export default class Discovery extends EventEmitter {
     parsedMsg: DiscoveryParseResult,
     remote: dgram.RemoteInfo
   ) {
-    logger.info(
+    log.info(
       `received a COORDINATOR message from ${remote.address}:${remote.port}`
     );
-    logger.debug(
+    log.debug(
       `COORDINATOR message content (from ${remote.address}:${
         remote.port
       }): ${parsedMsg.parts.join(' ')}`
@@ -798,8 +794,8 @@ export default class Discovery extends EventEmitter {
       `ACK COORDINATOR ${JSON.stringify([...parsedMsg.nodeInfo])}`
     );
     this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
-    logger.info(`sending ACK COORDINATOR to ${remote.address}:${remote.port}`);
-    logger.debug(`ACK message content (sent): '${ack.toString('utf-8')}'`);
+    log.info(`sending ACK COORDINATOR to ${remote.address}:${remote.port}`);
+    log.debug(`ACK message content (sent): '${ack.toString('utf-8')}'`);
 
     // update the node list and emit newRoles event
     this.#updateRoles(parsedMsg.nodeInfo);
@@ -808,7 +804,7 @@ export default class Discovery extends EventEmitter {
 
   #updateRoles(nodeData: CoordinatorMsgNodeInfo[]) {
     if (this.#nodes.length !== nodeData.length) {
-      logger.warn(
+      log.warn(
         `the node data received in a COORDINATOR message has a different number of elements (local/remote: ${
           this.#nodes.length
         }/${nodeData.length})`

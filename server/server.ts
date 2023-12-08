@@ -12,20 +12,22 @@ import Editing from './roles/editing.ts';
 import Messaging from './roles/messaging.ts';
 import { NodeInfo } from './types.ts';
 
+const log = logger.child({ module: 'server' });
+
 const role: string | null = null;
 let editing: Editing | null = null;
 let messaging: Messaging | null = null;
 
 const discovery = new Discovery();
 discovery.on('newNodes', (newNodes: NodeInfo[]) => {
-  logger.info(`NEW NODES EVENT: ${JSON.stringify(newNodes)}`);
+  log.info(`NEW NODES EVENT: ${JSON.stringify(newNodes)}`);
 });
 
 discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
-  logger.info(`NEW ROLES EVENT (${source}): ${JSON.stringify(newNodes)}`);
+  log.info(`NEW ROLES EVENT (${source}): ${JSON.stringify(newNodes)}`);
 
   const roles = newNodes.find((node) => node.address === HOST)?.roles;
-  logger.info(`assuming new role(s): ${JSON.stringify(roles)}`);
+  log.info(`assuming new role(s): ${JSON.stringify(roles)}`);
 
   // close previously opened Messaging instance
   if (messaging) {
@@ -57,6 +59,6 @@ if (role) {
       editing.listen();
       break;
     default:
-      logger.error('unknown role');
+      log.error('unknown role');
   }
 }

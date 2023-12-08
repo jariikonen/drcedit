@@ -5,6 +5,8 @@ import { io, Socket } from 'socket.io-client';
 import { SOCKETIO_PORT_INTERNAL, HOST } from '../utils/config';
 import logger from '../utils/logger';
 
+const log = logger.child({ module: 'Messaging' });
+
 export default class Messaging extends EventEmitter {
   #server: Server | null = null;
 
@@ -14,7 +16,7 @@ export default class Messaging extends EventEmitter {
     super();
     // Messaging instance functions either as a Socket.io server
     if (broker) {
-      logger.info('starting a new message broker');
+      log.info('starting a new message broker');
       this.#server = new Server();
       this.#initBroker();
     }
@@ -25,9 +27,9 @@ export default class Messaging extends EventEmitter {
           'if Messaging instance is not a broker a brokerAddress parameter must be set'
         );
       }
-      logger.info('starting a new messaging client');
+      log.info('starting a new messaging client');
       const brokerUrl = `ws://${brokerAddress}:${SOCKETIO_PORT_INTERNAL}`;
-      logger.info(
+      log.info(
         `new messaging client is connecting to message broker (${brokerUrl})`
       );
       this.#client = io(brokerUrl, {
@@ -46,7 +48,7 @@ export default class Messaging extends EventEmitter {
       const remoteHostAddress = Messaging.#getRemoteHostFromHandshake(socket);
       await socket.join(remoteHostAddress);
 
-      logger.info(
+      log.info(
         `broker connected to ${remoteHostAddress} (socket: ${socket.id})`
       );
 
@@ -54,7 +56,7 @@ export default class Messaging extends EventEmitter {
       // passing the room name as parameter
       socket.on('join', async (room: string) => {
         await socket.join(room);
-        logger.info(
+        log.info(
           `added ${remoteHostAddress} (socket: ${socket.id}) to room ${room}`
         );
       });
@@ -62,18 +64,18 @@ export default class Messaging extends EventEmitter {
       // clients can send messages to specific rooms by sending them as
       // 'toRoom' events
       socket.on('toRoom', (room: string, event: string, message: string) => {
-        logger.info(
+        log.info(
           `passing a message as '${event}' event to room '${room}': '${message}'`
         );
         socket.to(room).emit(event, message);
       });
 
       socket.onAny((event, ...args) => {
-        logger.info(`received a message (${event}): ${JSON.stringify(args)}`);
+        log.info(`received a message (${event}): ${JSON.stringify(args)}`);
       });
 
       socket.on('disconnect', (reason) => {
-        logger.info(`socket ${socket.id} disconnected (${reason})`);
+        log.info(`socket ${socket.id} disconnected (${reason})`);
       });
     });
 
@@ -102,15 +104,15 @@ export default class Messaging extends EventEmitter {
       );
     }
     this.#client.on('connect', () => {
-      logger.info(`client connected (socket: ${this.#client?.id})`);
+      log.info(`client connected (socket: ${this.#client?.id})`);
     });
 
     this.#client.onAny((event, ...args) => {
-      logger.info(`received a message (${event}): ${JSON.stringify(args)}`);
+      log.info(`received a message (${event}): ${JSON.stringify(args)}`);
     });
 
     this.#client.on('disconnection', (reason) => {
-      logger.info(`client ${this.#client?.id} disconnected (${reason})`);
+      log.info(`client ${this.#client?.id} disconnected (${reason})`);
     });
   }
 
@@ -129,20 +131,20 @@ export default class Messaging extends EventEmitter {
     if (!instance) {
       throw new Error('no Messaging instance');
     }
-    logger.info(`sending message as '${event}' event: '${message}'`);
+    log.info(`sending message as '${event}' event: '${message}'`);
     instance.emit(event, message);
   }
 
   sendToRoom(room: string, event: string, message: string) {
     if (this.#client) {
-      logger.info(
+      log.info(
         `client sending message as '${event}' event to room '${room}': '${message}'`
       );
       this.#client.emit('toRoom', room, event, message);
       return;
     }
     if (this.#server) {
-      logger.info(
+      log.info(
         `broker sending message as '${event}' event to room '${room}': '${message}`
       );
       this.#server.to(room).emit(event, message);
@@ -153,13 +155,13 @@ export default class Messaging extends EventEmitter {
 
   close(): void {
     if (this.#server) {
-      logger.info('closing the messaging server...');
+      log.info('closing the messaging server...');
       this.#server?.close();
     }
     if (this.#client) {
       const clientSocketId = this.#client.id;
       this.#client?.disconnect();
-      logger.info(`closing the messaging client (socket ${clientSocketId})`);
+      log.info(`closing the messaging client (socket ${clientSocketId})`);
     }
   }
 }

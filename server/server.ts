@@ -12,7 +12,7 @@ import Editing from './roles/editing.ts';
 import Messaging from './roles/messaging.ts';
 import { NodeInfo } from './types.ts';
 
-const log = logger.child({ module: 'server' });
+const log = logger.child({ caller: 'server' });
 
 const role: string | null = null;
 let editing: Editing | null = null;

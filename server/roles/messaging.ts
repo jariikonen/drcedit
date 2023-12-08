@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { SOCKETIO_PORT_INTERNAL, HOST } from '../utils/config';
 import logger from '../utils/logger';
 
-const log = logger.child({ module: 'Messaging' });
+const log = logger.child({ caller: 'Messaging' });
 
 export default class Messaging extends EventEmitter {
   #server: Server | null = null;

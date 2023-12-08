@@ -20,7 +20,7 @@ import {
 } from '../types.ts';
 import { getPriorityNumber, validAddress } from '../utils/networkinfo.ts';
 
-const log = logger.child({ module: 'Discovery' });
+const log = logger.child({ caller: 'Discovery' });
 
 type DiscoveryMessageType =
   | 'JOIN'

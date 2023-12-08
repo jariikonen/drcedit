@@ -149,16 +149,15 @@ export default class Discovery extends EventEmitter {
         log.info(
           `sending JOIN to ${NETWORK_INFO.broadcast}:${DISCOVERY_PORT} (broadcast)`
         );
-        log.debug(
-          `JOIN message content (sent): '${joinMessage.toString('utf-8')}'`
-        );
       }, DISCOVERY_MESSAGE_INTERVAL);
     });
 
     // and add event listener to handle received messages
     this.#socket.on('message', (msg, remote) => {
       log.debug(
-        `message from ${remote.address}:${remote.port}: ${msg.toString()}`
+        `message from ${remote.address}:${remote.port}:\n\t'${msg.toString(
+          'utf-8'
+        )}'`
       );
       let parsedMessage;
       try {
@@ -174,7 +173,7 @@ export default class Discovery extends EventEmitter {
       try {
         switch (parsedMessage.type) {
           case 'JOIN':
-            this.#handleJoin(parsedMessage, remote);
+            this.#handleJoin(remote);
             break;
           case 'HELLO':
             this.#handleHello(parsedMessage, remote);
@@ -398,15 +397,10 @@ export default class Discovery extends EventEmitter {
     }
   }
 
-  #handleJoin(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
+  #handleJoin(remote: dgram.RemoteInfo): void {
     if (remote.address !== HOST) {
       log.info(`received JOIN from ${remote.address}:${remote.port}`);
     }
-    log.debug(
-      `JOIN message content (received from ${remote.address}:${
-        remote.port
-      }): '${parsedMsg.parts.join(' ')}'`
-    );
 
     // add address to nodes array if message is from another node (not self/
     // host) and there is not a HELLO message interval for this node (meaning
@@ -434,7 +428,7 @@ export default class Discovery extends EventEmitter {
           );
           log.info(`sending HELLO to ${remote.address}:${remote.port}`);
           log.debug(
-            `HELLO message content (sent): '${hello.toString('utf-8')}'`
+            `HELLO message content (sent):\n\t'${hello.toString('utf-8')}'`
           );
         }, DISCOVERY_MESSAGE_INTERVAL);
         // stop sending messages after a timeout
@@ -454,11 +448,6 @@ export default class Discovery extends EventEmitter {
     remote: dgram.RemoteInfo
   ): void {
     log.info(`received HELLO from ${remote.address}:${remote.port}`);
-    log.debug(
-      `HELLO message content (received from ${remote.address}:${
-        remote.port
-      }): '${parsedMsg.parts.join(' ')}'`
-    );
 
     // stop sending JOIN messages
     this.#stopSendingJoin();
@@ -476,7 +465,9 @@ export default class Discovery extends EventEmitter {
     );
     this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
     log.info(`sending ACK HELLO to ${remote.address}:${remote.port}`);
-    log.debug(`ACK HELLO message content (sent): '${ack.toString('utf-8')}'`);
+    log.debug(
+      `ACK HELLO message content (sent):\n\t'${ack.toString('utf-8')}'`
+    );
 
     // stop sending HELLO messages to this node
     if (this.#helloInterval[remote.address]) {
@@ -510,11 +501,6 @@ export default class Discovery extends EventEmitter {
   #handleAck(parsedMsg: DiscoveryParseResult, remote: dgram.RemoteInfo): void {
     log.info(
       `received ACK ${parsedMsg.responseType} from ${remote.address}:${remote.port}`
-    );
-    log.debug(
-      `received ACK ${parsedMsg.responseType} message (from ${remote.address}:${
-        remote.port
-      }): '${parsedMsg.parts.join(' ')}'`
     );
 
     switch (parsedMsg.responseType) {
@@ -573,7 +559,9 @@ export default class Discovery extends EventEmitter {
       log.info(
         `${HOST} has priority ${PRIORITY}, ${
           higherPriorities.length
-        } node(s) with higher priority: ${JSON.stringify(higherPriorities)}`
+        } node(s) with higher priority: ${Discovery.#pretifyHigherPriorities(
+          higherPriorities
+        )}`
       );
       // send ELECTION messages to higher priority nodes
       this.#sendElection(higherPriorities);
@@ -581,13 +569,19 @@ export default class Discovery extends EventEmitter {
     // HOST has the highest priority
     else {
       log.info(
-        `${HOST} has the HIGHEST PRIORITY (${PRIORITY}) (nodes: ${JSON.stringify(
-          [...this.#nodes]
+        `${HOST} has the HIGHEST PRIORITY (${PRIORITY}) (${Discovery.#pretifyHigherPriorities(
+          this.#nodes
         )})`
       );
       // send COORDINATOR to all the other nodes
       this.#sendCoordinator();
     }
+  }
+
+  static #pretifyHigherPriorities(higherPriorities: NodeInfo[]): string {
+    return `${JSON.stringify([
+      ...higherPriorities.map((node) => `${node.address}: ${node.priority}`),
+    ])}`;
   }
 
   #sendElection(higherPriorities: NodeInfo[]): void {
@@ -602,9 +596,6 @@ export default class Discovery extends EventEmitter {
           node.address
         );
         log.info(`sending ELECTION to ${node.address}:${DISCOVERY_PORT}`);
-        log.debug(
-          `ELECTION message content (sent): '${election.toString('utf-8')}'`
-        );
       }, DISCOVERY_MESSAGE_INTERVAL);
 
       // stop sending messages after a timeout
@@ -656,7 +647,7 @@ export default class Discovery extends EventEmitter {
 
     // update nodes array and emit a NEW ROLES event
     this.#nodes = nodes;
-    log.debug(`updated the roles: ${JSON.stringify(this.#nodes)}`);
+    log.debug(this.#nodes, 'updated the roles');
     this.emit('newRoles', [...this.#nodes], '#setRoles');
   }
 
@@ -686,7 +677,7 @@ export default class Discovery extends EventEmitter {
         );
         log.info(`sending COORDINATOR to ${node.address}:${DISCOVERY_PORT}`);
         log.debug(
-          `COORDINATOR message content (sent): '${coordinator.toString(
+          `COORDINATOR message content (sent):\n\t'${coordinator.toString(
             'utf-8'
           )}'`
         );
@@ -718,7 +709,7 @@ export default class Discovery extends EventEmitter {
     const ok = Buffer.from('OK');
     this.#socket.send(ok, 0, ok.length, remote.port, remote.address);
     log.info(`sending OK to ${remote.address}:${remote.port}`);
-    log.debug(`OK message content (sent): '${ok.toString('utf-8')}'`);
+    log.debug(`OK message content (sent):\n\t'${ok.toString('utf-8')}'`);
   }
 
   #stopPreElectionTimeout() {
@@ -772,11 +763,6 @@ export default class Discovery extends EventEmitter {
     log.info(
       `received a COORDINATOR message from ${remote.address}:${remote.port}`
     );
-    log.debug(
-      `COORDINATOR message content (from ${remote.address}:${
-        remote.port
-      }): ${parsedMsg.parts.join(' ')}`
-    );
 
     // check that message is valid, i.e., the coordinator has a higher priority
     if (getPriorityNumber(remote.address, NETWORK_INFO.netmask) <= PRIORITY) {
@@ -795,7 +781,7 @@ export default class Discovery extends EventEmitter {
     );
     this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
     log.info(`sending ACK COORDINATOR to ${remote.address}:${remote.port}`);
-    log.debug(`ACK message content (sent): '${ack.toString('utf-8')}'`);
+    log.debug(`ACK message content (sent):\n\t'${ack.toString('utf-8')}'`);
 
     // update the node list and emit newRoles event
     this.#updateRoles(parsedMsg.nodeInfo);

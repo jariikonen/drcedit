@@ -56,7 +56,7 @@ export default class Messaging extends EventEmitter {
       // passing the room name as parameter
       socket.on('join', async (room: string) => {
         await socket.join(room);
-        log.info(
+        log.debug(
           `added ${remoteHostAddress} (socket: ${socket.id}) to room ${room}`
         );
       });
@@ -64,14 +64,14 @@ export default class Messaging extends EventEmitter {
       // clients can send messages to specific rooms by sending them as
       // 'toRoom' events
       socket.on('toRoom', (room: string, event: string, message: string) => {
-        log.info(
+        log.debug(
           `passing a message as '${event}' event to room '${room}': '${message}'`
         );
         socket.to(room).emit(event, message);
       });
 
       socket.onAny((event, ...args) => {
-        log.info(`received a message (${event}): ${JSON.stringify(args)}`);
+        log.debug(`received a message (${event}): ${JSON.stringify(args)}`);
       });
 
       socket.on('disconnect', (reason) => {
@@ -131,20 +131,20 @@ export default class Messaging extends EventEmitter {
     if (!instance) {
       throw new Error('no Messaging instance');
     }
-    log.info(`sending message as '${event}' event: '${message}'`);
+    log.debug(`sending message as '${event}' event: '${message}'`);
     instance.emit(event, message);
   }
 
   sendToRoom(room: string, event: string, message: string) {
     if (this.#client) {
-      log.info(
+      log.debug(
         `client sending message as '${event}' event to room '${room}': '${message}'`
       );
       this.#client.emit('toRoom', room, event, message);
       return;
     }
     if (this.#server) {
-      log.info(
+      log.debug(
         `broker sending message as '${event}' event to room '${room}': '${message}`
       );
       this.#server.to(room).emit(event, message);
@@ -155,7 +155,7 @@ export default class Messaging extends EventEmitter {
 
   close(): void {
     if (this.#server) {
-      log.info('closing the messaging server...');
+      log.info('closing the messaging server');
       this.#server?.close();
     }
     if (this.#client) {

@@ -1,9 +1,10 @@
 /* eslint-disable import/extensions */
 
 import logger from './utils/logger.ts';
-import { DISCOVERY_PORT, HOST } from './utils/config.ts';
-import Discovery from './roles/discovery.ts';
-import Messaging from './roles/messaging.ts';
+import { HOST } from './utils/config.ts';
+import Discovery from './roles/Discovery.ts';
+import Messaging from './roles/Messaging.ts';
+import Storage from './roles/Storage.ts';
 import { NodeInfo } from './types.ts';
 
 const log = logger.child({ caller: 'server' });
@@ -45,4 +46,10 @@ discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
 });
 
 // start discovery server
-discovery.bind(DISCOVERY_PORT);
+// discovery.bind(DISCOVERY_PORT);
+
+const storage = new Storage();
+setTimeout(() => {
+  const files = storage.getFiles();
+  log.info(files, `typeof: ${typeof files}, isArray: ${Array.isArray(files)}`);
+}, 1000);

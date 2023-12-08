@@ -41,3 +41,8 @@ export interface NodeInfo extends CoordinatorMsgNodeInfo {
 }
 
 export type NodeList = string[];
+
+export interface File {
+  name: string;
+  content: Y.Doc;
+}

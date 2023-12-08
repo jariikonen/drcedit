@@ -1,24 +1,17 @@
 /* eslint-disable import/extensions */
 
 import logger from './utils/logger.ts';
-import {
-  DISCOVERY_PORT,
-  HOST,
-  HTTP_PORT,
-  SOCKETIO_PORT,
-} from './utils/config.ts';
+import { DISCOVERY_PORT, HOST } from './utils/config.ts';
 import Discovery from './roles/discovery.ts';
-import Editing from './roles/editing.ts';
 import Messaging from './roles/messaging.ts';
 import { NodeInfo } from './types.ts';
 
 const log = logger.child({ caller: 'server' });
 
-const role: string | null = null;
-let editing: Editing | null = null;
 let messaging: Messaging | null = null;
 
 const discovery = new Discovery();
+
 discovery.on('newNodes', (newNodes: NodeInfo[]) => {
   log.info(`NEW NODES EVENT: ${JSON.stringify(newNodes)}`);
 });
@@ -29,7 +22,7 @@ discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
   const roles = newNodes.find((node) => node.address === HOST)?.roles;
   log.info(`assuming new role(s): ${JSON.stringify(roles)}`);
 
-  // close previously opened Messaging instance
+  // close previously opened Messaging instance (if exists)
   if (messaging) {
     messaging.close();
   }
@@ -50,15 +43,6 @@ discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
     );
   }
 });
-discovery.bind(DISCOVERY_PORT);
 
-if (role) {
-  switch (role) {
-    case 'EDITING':
-      editing = new Editing(HOST, HTTP_PORT, SOCKETIO_PORT);
-      editing.listen();
-      break;
-    default:
-      log.error('unknown role');
-  }
-}
+// start discovery server
+discovery.bind(DISCOVERY_PORT);

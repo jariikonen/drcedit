@@ -120,6 +120,7 @@ export default class Discovery extends EventEmitter {
     super();
     this.#socket = dgram.createSocket('udp4');
 
+    // add oneself to the nodes list
     this.#nodes.push({
       address: HOST,
       priority: PRIORITY,

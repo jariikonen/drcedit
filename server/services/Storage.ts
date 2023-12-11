@@ -2,7 +2,7 @@
 import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import logger from '../utils/logger';
-import { File } from '../types';
+import { File, isFile } from '../types';
 import { STORAGE_DIR, STORAGE_FILES_PATH } from '../utils/config';
 
 const log = logger.child({ caller: 'Storage' });
@@ -14,30 +14,36 @@ export default class Storage extends EventEmitter {
 
   constructor() {
     super();
-    fs.readFile(STORAGE_FILES_PATH, 'utf-8', (err, data) => {
-      if (err && err.code !== 'ENOENT')
-        log.error(err, 'constructor, fs-callback:');
-      if (err) Storage.#createStorageDir();
-      if (data) {
-        try {
-          this.#files = Storage.#parseFileData(data);
-          this.#initialized = true;
-          log.info(
-            `Storage initialized - found these files: ${JSON.stringify(
-              this.#files
-            )}`
-          );
-        } catch (error) {
-          log.error(error, 'not a valid File object');
-        }
+    let files: File[] = [];
+    try {
+      const data = fs.readFileSync(STORAGE_FILES_PATH, 'utf-8');
+      files = Storage.#parseFileData(data);
+    } catch (error: unknown) {
+      if (Storage.#isNodeError(error) && error.code === 'ENOENT') {
+        Storage.#createStorageDir();
       }
-    });
+      if (error instanceof Error) log.error(error.stack);
+      else log.error(error);
+    }
+    this.#files = files;
+    this.#initialized = true;
+    log.debug(this.#files, 'Storage initialized - found these files:');
+  }
+
+  static #isNodeError(error: unknown): error is NodeJS.ErrnoException {
+    return (
+      error instanceof Error &&
+      (error as NodeJS.ErrnoException).code !== undefined
+    );
   }
 
   static #createStorageDir() {
-    fs.mkdir(STORAGE_DIR, (err) => {
-      if (err && err.code !== 'EEXIST') throw err;
-    });
+    try {
+      fs.mkdirSync(STORAGE_DIR);
+    } catch (error) {
+      if (Storage.#isNodeError(error) && error.code !== 'EEXIST')
+        log.error(error.stack);
+    }
   }
 
   static #parseFileData(data: string): File[] {
@@ -46,26 +52,59 @@ export default class Storage extends EventEmitter {
       throw new Error('not an array');
     }
     const parsedArray = array.map((file) => {
-      if (!Storage.#isFileObject(file)) {
-        throw new Error('not a File object');
+      if (!isFile(file)) {
+        throw new Error(`not a File object: '${JSON.stringify(file)}'`);
       }
-      log.info(`file object: ${JSON.stringify(file)}`);
       return file;
     });
     return parsedArray;
   }
 
-  static #isFileObject(obj: unknown): obj is File {
-    // NOTICE! For simplicity, property types (especially Y.Doc) are NOT tested!
-    return (
-      (obj as File).content !== undefined && (obj as File).name !== undefined
-    );
-  }
-
   getFiles() {
     if (!this.#initialized) {
-      return null;
+      return this.#waitUntilInitialized<File[]>(() => this.#files);
     }
-    return this.#files;
+    return new Promise((resolve) => {
+      resolve(this.#files);
+    });
+  }
+
+  #waitUntilInitialized<Type>(callback: () => Type): Promise<Type> {
+    return new Promise((resolve, reject) => {
+      let count = 1;
+      const interval = setInterval(() => {
+        if (this.#initialized) {
+          resolve(callback());
+          clearInterval(interval);
+        }
+        if (count > 4) {
+          reject(new Error('initialization took too long'));
+          clearInterval(interval);
+        }
+        count += 1;
+      }, 100);
+    });
+  }
+
+  createFile(filename: string) {
+    const newFile = {
+      filename,
+      content: null,
+    };
+    const callback = () => {
+      this.#files.push(newFile);
+      this.#writeFiles();
+      return newFile;
+    };
+    if (!this.#initialized) {
+      return this.#waitUntilInitialized<File>(callback);
+    }
+    return new Promise((resolve) => {
+      resolve(callback());
+    });
+  }
+
+  #writeFiles() {
+    fs.writeFileSync(STORAGE_FILES_PATH, JSON.stringify(this.#files), 'utf-8');
   }
 }

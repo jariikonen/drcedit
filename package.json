@@ -8,9 +8,16 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "server": "tsc && vite build && tsx server/server.ts | npx pino-pretty"
+    "server": "tsx server/server.ts | npx pino-pretty",
+    "production": "tsc && vite build && tsx server/server.ts | npx pino-pretty",
+    "production-no-pino": "tsc && vite build && tsx server/server.ts"
   },
   "dependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@fontsource/roboto": "^5.0.8",
+    "@mui/material": "^5.14.20",
+    "axios": "^1.6.2",
     "cors": "^2.8.5",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-airbnb-typescript": "^17.1.0",

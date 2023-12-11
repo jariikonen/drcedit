@@ -43,6 +43,14 @@ export interface NodeInfo extends CoordinatorMsgNodeInfo {
 export type NodeList = string[];
 
 export interface File {
-  name: string;
-  content: Y.Doc;
+  filename: string;
+  content: Y.Doc | null;
+}
+
+export function isFile(obj: unknown): obj is File {
+  return (
+    (obj as File).filename !== undefined &&
+    (obj as File).content !== undefined &&
+    ((obj as File).content === null || (obj as File).content instanceof Y.Doc)
+  );
 }

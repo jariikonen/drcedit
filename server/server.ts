@@ -4,7 +4,7 @@ import logger from './utils/logger.ts';
 import { HOST } from './utils/config.ts';
 import Discovery from './services/Discovery.ts';
 import Messaging from './services/Messaging.ts';
-// import Storage from './services/Storage.ts';
+import Storage from './services/Storage.ts';
 import Gateway from './services/Gateway.ts';
 import { NodeInfo } from './types.ts';
 
@@ -49,11 +49,17 @@ discovery.on('newRoles', (newNodes: NodeInfo[], source: string) => {
 // start discovery server
 // discovery.bind(DISCOVERY_PORT);
 
-/* const storage = new Storage();
-setTimeout(() => {
-  const files = storage.getFiles();
-  log.info(files, `typeof: ${typeof files}, isArray: ${Array.isArray(files)}`);
-}, 1000); */
+// eslint-disable-next-line no-new
+const storage = new Storage();
+/* storage
+  .getFiles()
+  .then((files) => {
+    log.info(
+      files,
+      `typeof: ${typeof files}, isArray: ${Array.isArray(files)}`
+    );
+  })
+  .catch((error: Error) => log.error(error.stack)); */
 
 // eslint-disable-next-line no-new
-new Gateway();
+new Gateway(storage);

@@ -3,11 +3,16 @@ import ReactQuill, { Quill, ReactQuillProps } from 'react-quill';
 import QuillCursors from 'quill-cursors';
 import 'react-quill/dist/quill.snow.css';
 import * as Y from 'yjs';
-import { io, Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
+import Typography from '@mui/material/Typography';
+import FileList from './FileList';
+import { File } from '../../server/types';
 
 Quill.register('modules/cursors', QuillCursors);
 
 function Editor() {
+  const [file, setFile] = useState<File | null>(null);
+
   const ydocRef = useRef(new Y.Doc());
   const ytextRef = useRef(ydocRef.current.getText());
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -16,7 +21,8 @@ function Editor() {
   // const [socketID, setSocketID] = useState<string>();
 
   useEffect(() => {
-    socketRef.current = io('ws://localhost:1234', {});
+    console.log('useEffect');
+    /* socketRef.current = io('ws://localhost:1234', {});
     socketRef.current.onAny((eventName, ...args) => {
       console.log(eventName, args);
     });
@@ -34,7 +40,7 @@ function Editor() {
           console.log(message);
         });
       }
-    });
+    }); */
   }, []);
 
   const modules = {
@@ -90,17 +96,25 @@ function Editor() {
     }
   );
 
+  if (!file) {
+    return <FileList setFile={setFile} />;
+  }
   return (
-    <ReactQuill
-      theme="snow"
-      modules={modules}
-      formats={formats}
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      value={value}
-      onChange={handleContentChange}
-      // eslint-disable-next-line jsx-a11y/tabindex-no-positive
-      tabIndex={1}
-    />
+    <>
+      <Typography align="left" variant="h5" style={{ marginBottom: '1rem' }}>
+        File: {file.filename}
+      </Typography>
+      <ReactQuill
+        theme="snow"
+        modules={modules}
+        formats={formats}
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value={value}
+        onChange={handleContentChange}
+        // eslint-disable-next-line jsx-a11y/tabindex-no-positive
+        tabIndex={1}
+      />
+    </>
   );
 }
 

@@ -37,7 +37,10 @@ export interface NodeInfo extends CoordinatorMsgNodeInfo {
 export type NodeList = string[];
 
 export interface Document {
-  /** Unique name for the file. */
+  /** Unique identification number of the document. */
+  documentID: string;
+
+  /** Name of the document. */
   documentName: string;
 
   /** Object holding the document contents. */
@@ -47,7 +50,10 @@ export interface Document {
 /** Type guard for the Document type. */
 export function isDocument(obj: unknown): obj is Document {
   return (
+    (obj as Document).documentID !== undefined &&
+    typeof (obj as Document).documentID === 'string' &&
     (obj as Document).documentName !== undefined &&
+    typeof (obj as Document).documentName === 'string' &&
     (obj as Document).content !== undefined &&
     ((obj as Document).content === null ||
       (obj as Document).content instanceof Y.Doc)
@@ -73,4 +79,22 @@ export interface DocumentRegistration {
 export interface EditingServerData {
   /** IP address of the editing server node the client must use. */
   contactNode: string;
+
+  /** Unique identification number of the document. */
+  documentID: string;
+
+  /** Name of the document to be edited. */
+  documentName: string;
+}
+
+/** Type guard for the EditingServerData type. */
+export function isEditingServerData(obj: unknown): obj is EditingServerData {
+  return (
+    (obj as EditingServerData).contactNode !== undefined &&
+    typeof (obj as EditingServerData).contactNode === 'string' &&
+    (obj as EditingServerData).documentID !== undefined &&
+    (typeof (obj as EditingServerData).documentID === 'string' &&
+      (obj as EditingServerData).documentName) !== undefined &&
+    typeof (obj as EditingServerData).documentName === 'string'
+  );
 }

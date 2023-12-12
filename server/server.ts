@@ -8,6 +8,7 @@ import Storage from './services/Storage.ts';
 import Gateway from './services/Gateway.ts';
 import { NodeInfo } from './types.ts';
 import Editing from './services/Editing.ts';
+import LoadBalancing from './services/LoadBalancing.ts';
 
 const log = logger.child({ caller: 'server' });
 
@@ -62,8 +63,8 @@ const storage = new Storage();
   })
   .catch((error: Error) => log.error(error.stack)); */
 
-// eslint-disable-next-line no-new
-new Editing(HOST, storage);
+const loadBalancer = new LoadBalancing();
+const editing = new Editing(HOST, storage, loadBalancer);
 
 // eslint-disable-next-line no-new
-new Gateway(storage);
+new Gateway(storage, editing);

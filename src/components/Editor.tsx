@@ -6,12 +6,13 @@ import * as Y from 'yjs';
 import { Socket } from 'socket.io-client';
 import Typography from '@mui/material/Typography';
 import DocumentList from './DocumentList';
-import { Document } from '../../server/types';
+import { EditingServerData } from '../../server/types';
 
 Quill.register('modules/cursors', QuillCursors);
 
 function Editor() {
-  const [document, setDocument] = useState<Document | null>(null);
+  const [editingServerData, setEditingServerData] =
+    useState<EditingServerData | null>(null);
 
   const ydocRef = useRef(new Y.Doc());
   const ytextRef = useRef(ydocRef.current.getText());
@@ -21,7 +22,6 @@ function Editor() {
   // const [socketID, setSocketID] = useState<string>();
 
   useEffect(() => {
-    console.log('useEffect');
     /* socketRef.current = io('ws://localhost:1234', {});
     socketRef.current.onAny((eventName, ...args) => {
       console.log(eventName, args);
@@ -96,13 +96,13 @@ function Editor() {
     }
   );
 
-  if (!document) {
-    return <DocumentList setDocument={setDocument} />;
+  if (!editingServerData) {
+    return <DocumentList setEditingServerData={setEditingServerData} />;
   }
   return (
     <>
       <Typography align="left" variant="h5" style={{ marginBottom: '1rem' }}>
-        Document: {document.documentName}
+        Document: {editingServerData.documentName}
       </Typography>
       <ReactQuill
         theme="snow"

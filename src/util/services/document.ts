@@ -1,5 +1,9 @@
 import axios from 'axios';
-import { Document, isDocument } from '../../../server/types';
+import {
+  EditingServerData,
+  isEditingServerData,
+  Document,
+} from '../../../server/types';
 
 const baseUrl = '/api/documents';
 
@@ -8,20 +12,31 @@ async function getAll() {
   return data;
 }
 
-const createDocument = (newDocumentName: string) => {
-  console.log(`creating new document ${newDocumentName}`);
-  const request = axios.post(baseUrl, { documentName: newDocumentName });
-  return request.then((response) => {
-    if (response.data && isDocument(response.data)) {
+function createDocument(
+  newDocumentName: string
+): Promise<EditingServerData | null> {
+  const promise = axios.post(baseUrl, { documentName: newDocumentName });
+  return promise.then((response) => {
+    if (response.data && isEditingServerData(response.data)) {
       return response.data;
     }
     return null;
   });
-};
+}
+
+async function editDocument(
+  documentID: string
+): Promise<EditingServerData | null> {
+  const { data } = await axios.get<EditingServerData | null>(
+    `${baseUrl}/edit/${documentID}`
+  );
+  return data;
+}
 
 const documentService = {
   getAll,
   createDocument,
+  editDocument,
 };
 
 export default documentService;

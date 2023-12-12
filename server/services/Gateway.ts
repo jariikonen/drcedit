@@ -4,6 +4,7 @@ import express, { Express, Router, Request } from 'express';
 import logger from '../utils/logger';
 import { HOST, GATEWAY_HTTP_PORT } from '../utils/config';
 import Storage from './Storage';
+import Editing from './Editing';
 
 const log = logger.child({ caller: 'Gateway' });
 
@@ -12,11 +13,15 @@ export default class Gateway extends EventEmitter {
 
   #storage: Storage;
 
+  #editing: Editing;
+
   #documentRouter: Router;
 
-  constructor(storage: Storage) {
+  constructor(storage: Storage, editing: Editing) {
     super();
     this.#storage = storage;
+    this.#editing = editing;
+
     this.#app = express();
 
     this.#app.use(express.static('dist'));
@@ -71,7 +76,37 @@ export default class Gateway extends EventEmitter {
             document,
             'created a new document - responding with the new document object'
           );
-          res.send(document);
+          res.send(this.#editing.getEditingNode(document));
+        })
+        .catch((error) => {
+          if (error instanceof Error) log.error(error.stack);
+          else log.error(error);
+        });
+    });
+
+    interface EditRequest extends Request {
+      params: {
+        id: string;
+      };
+    }
+
+    router.get('/edit/:id', (req: EditRequest, res) => {
+      const { id } = req.params;
+      log.debug(
+        req,
+        `received a request to edit document '${id}' (get /api/documents/${id})`
+      );
+      this.#storage
+        .getDocument(id)
+        .then((document) => {
+          if (!document) {
+            res.status(404);
+            res.send('document not found');
+            return;
+          }
+          const serverData = this.#editing.getEditingNode(document);
+          log.info(serverData, 'sending editing server data');
+          res.send(serverData);
         })
         .catch((error) => {
           if (error instanceof Error) log.error(error.stack);

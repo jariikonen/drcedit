@@ -26,8 +26,8 @@ export const DISCOVERY_PREELECTION_TIMEOUT = parseInt(
 );
 export const PRIORITY = getPriorityNumber(HOST, NETWORK_INFO.netmask);
 export const STORAGE_DIR = process.env.STORAGE_DIR ?? 'storage';
-export const STORAGE_FILES_PATH =
-  process.env.STORAGE_FILES_PATH ?? 'storage/files.json';
+export const STORAGE_DOCUMENTS_PATH =
+  process.env.STORAGE_DOCUMENTS_PATH ?? 'storage/documents.json';
 export const GATEWAY_HTTP_PORT = parseInt(
   `${process.env.GATEWAY_HTTP_PORT ?? 8080}`,
   10

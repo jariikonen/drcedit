@@ -5,9 +5,10 @@ import { Server, Socket } from 'socket.io';
 import { EventEmitter } from 'node:events';
 // import * as Y from 'yjs';
 import logger from '../utils/logger.ts';
-import { DocumentRegistration } from '../types.ts';
+import { DocumentRegistration, EditingServerData, Document } from '../types.ts';
 import { SOCKETIO_PORT, HOST } from '../utils/config.ts';
 import Storage from './Storage.ts';
+import LoadBalancing from './LoadBalancing.ts';
 
 const log = logger.child({ caller: 'Editing' });
 
@@ -25,9 +26,15 @@ export default class Editing extends EventEmitter {
 
   #storage: Storage;
 
+  #loadBalancer: LoadBalancing;
+
   #documents: Record<string, DocumentRegistration> = {};
 
-  constructor(gatewayAddress: string, storage: Storage) {
+  constructor(
+    gatewayAddress: string,
+    storage: Storage,
+    loadBalancer: LoadBalancing
+  ) {
     super();
     this.#ioServer = new Server({
       cors: {
@@ -35,7 +42,9 @@ export default class Editing extends EventEmitter {
       },
     });
     this.#storage = storage;
-    console.log(this.#storage);
+    this.#loadBalancer = loadBalancer;
+    log.debug(this.#storage); // TO SUPPRESS ESLINT ERROR - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    log.debug(this.#loadBalancer); // TO SUPPRESS ESLINT ERROR - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     this.#initializeIoServer();
   }
 
@@ -48,23 +57,23 @@ export default class Editing extends EventEmitter {
       socket.on(
         'register',
         async (
-          filename: string,
+          documentID: string,
           callback: (response: ServerResponse) => ServerResponse
         ) => {
           log.info(
-            `client ${socket.id} requesting registration to edit document '${filename}'`
+            `client ${socket.id} requesting registration to edit document '${documentID}'`
           );
-          if (!(filename in this.#documents)) {
+          if (!(documentID in this.#documents)) {
             log.info(`responding to ${socket.id}: no such file`);
             callback({
               code: Editing.NOFILE,
-              message: `no such file ${filename}`,
+              message: `no such file '${documentID}' (documentID)`,
             });
             return;
           }
           // register client and add the socket to a document specific room
-          this.#documents[filename].clients.push(socket.id);
-          await socket.join(filename);
+          this.#documents[documentID].clients.push(socket.id);
+          await socket.join(documentID);
           log.info(`responding to ${socket.id}: OK`);
 
           callback({
@@ -94,5 +103,29 @@ export default class Editing extends EventEmitter {
 
     this.#ioServer.listen(SOCKETIO_PORT);
     log.info(`editing server listening on ${HOST}:${SOCKETIO_PORT}`);
+  }
+
+  getEditingNode(document: Document): EditingServerData {
+    if (!(document.documentID in this.#documents)) {
+      this.#assignNodes(document);
+    }
+    const docRegistration = this.#documents[document.documentID];
+    return {
+      contactNode: docRegistration.clientContactNode,
+      documentID: docRegistration.document.documentID,
+      documentName: docRegistration.document.documentName,
+    };
+  }
+
+  #assignNodes(document: Document) {
+    log.info(
+      `assigning editing nodes for document '${document.documentID}' (not fully implemented yet)`
+    );
+    this.#documents[document.documentID] = {
+      document,
+      clientContactNode: HOST,
+      nodes: [HOST],
+      clients: [],
+    };
   }
 }

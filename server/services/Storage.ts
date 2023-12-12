@@ -3,12 +3,14 @@ import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import logger from '../utils/logger';
 import { Document, isDocument } from '../types';
-import { STORAGE_DIR, STORAGE_FILES_PATH } from '../utils/config';
+import { STORAGE_DIR, STORAGE_DOCUMENTS_PATH } from '../utils/config';
 
 const log = logger.child({ caller: 'Storage' });
 
 export default class Storage extends EventEmitter {
   #documents: Document[] = [];
+
+  #documentIDCount = 0;
 
   #initialized = false;
 
@@ -16,16 +18,22 @@ export default class Storage extends EventEmitter {
     super();
     let documents: Document[] = [];
     try {
-      const data = fs.readFileSync(STORAGE_FILES_PATH, 'utf-8');
+      const data = fs.readFileSync(STORAGE_DOCUMENTS_PATH, 'utf-8');
       documents = Storage.#parseDocumentData(data);
     } catch (error: unknown) {
       if (Storage.#isNodeError(error) && error.code === 'ENOENT') {
+        log.debug('no document file - creating a new one');
         Storage.#createStorageDir();
-      }
-      if (error instanceof Error) log.error(error.stack);
-      else log.error(error);
+        this.#documents = [];
+        this.#writeDocuments();
+      } else if (error instanceof Error) {
+        log.error(error.stack);
+      } else log.error(error);
     }
     this.#documents = documents;
+    const maxID =
+      Math.max(...documents.map((doc) => parseInt(doc.documentID, 10))) + 1;
+    this.#documentIDCount = maxID > 0 ? maxID : 0;
     this.#initialized = true;
     log.debug(this.#documents, 'Storage initialized - found these documents:');
   }
@@ -60,7 +68,7 @@ export default class Storage extends EventEmitter {
     return parsedArray;
   }
 
-  getDocuments() {
+  getDocuments(): Promise<Document[]> {
     if (!this.#initialized) {
       return this.#waitUntilInitialized<Document[]>(() => this.#documents);
     }
@@ -78,7 +86,7 @@ export default class Storage extends EventEmitter {
           clearInterval(interval);
         }
         if (count > 4) {
-          reject(new Error('initialization took too long'));
+          reject(new Error('storage initialization took too long'));
           clearInterval(interval);
         }
         count += 1;
@@ -86,16 +94,32 @@ export default class Storage extends EventEmitter {
     });
   }
 
-  createDocument(documentName: string) {
+  getDocument(documentID: string): Promise<Document | undefined> {
+    const callback = () =>
+      this.#documents.find((doc) => doc.documentID === documentID);
+
+    if (!this.#initialized) {
+      return this.#waitUntilInitialized<Document | undefined>(callback);
+    }
+    return new Promise((resolve) => {
+      resolve(callback());
+    });
+  }
+
+  createDocument(documentName: string): Promise<Document> {
     const newDocument = {
       documentName,
+      documentID: this.#documentIDCount.toString(10),
       content: null,
     };
+    this.#documentIDCount += 1;
+
     const callback = () => {
       this.#documents.push(newDocument);
       this.#writeDocuments();
       return newDocument;
     };
+
     if (!this.#initialized) {
       return this.#waitUntilInitialized<Document>(callback);
     }
@@ -106,7 +130,7 @@ export default class Storage extends EventEmitter {
 
   #writeDocuments() {
     fs.writeFileSync(
-      STORAGE_FILES_PATH,
+      STORAGE_DOCUMENTS_PATH,
       JSON.stringify(this.#documents),
       'utf-8'
     );

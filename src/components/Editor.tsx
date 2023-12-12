@@ -5,13 +5,13 @@ import 'react-quill/dist/quill.snow.css';
 import * as Y from 'yjs';
 import { Socket } from 'socket.io-client';
 import Typography from '@mui/material/Typography';
-import FileList from './FileList';
-import { File } from '../../server/types';
+import DocumentList from './DocumentList';
+import { Document } from '../../server/types';
 
 Quill.register('modules/cursors', QuillCursors);
 
 function Editor() {
-  const [file, setFile] = useState<File | null>(null);
+  const [document, setDocument] = useState<Document | null>(null);
 
   const ydocRef = useRef(new Y.Doc());
   const ytextRef = useRef(ydocRef.current.getText());
@@ -96,13 +96,13 @@ function Editor() {
     }
   );
 
-  if (!file) {
-    return <FileList setFile={setFile} />;
+  if (!document) {
+    return <DocumentList setDocument={setDocument} />;
   }
   return (
     <>
       <Typography align="left" variant="h5" style={{ marginBottom: '1rem' }}>
-        File: {file.filename}
+        Document: {document.documentName}
       </Typography>
       <ReactQuill
         theme="snow"

@@ -3,7 +3,7 @@
 
 import { Server, Socket } from 'socket.io';
 import { EventEmitter } from 'node:events';
-import * as Y from 'yjs';
+// import * as Y from 'yjs';
 import logger from '../utils/logger.ts';
 import { DocumentRegistration } from '../types.ts';
 import { SOCKETIO_PORT, HOST } from '../utils/config.ts';
@@ -11,7 +11,16 @@ import Storage from './Storage.ts';
 
 const log = logger.child({ caller: 'Editing' });
 
+interface ServerResponse {
+  code: number;
+  message: string;
+}
+
 export default class Editing extends EventEmitter {
+  static OK: 1000;
+
+  static NOFILE = 1001;
+
   #ioServer: Server;
 
   #storage: Storage;
@@ -26,6 +35,7 @@ export default class Editing extends EventEmitter {
       },
     });
     this.#storage = storage;
+    console.log(this.#storage);
     this.#initializeIoServer();
   }
 
@@ -35,16 +45,34 @@ export default class Editing extends EventEmitter {
 
       await socket.join(socket.id);
 
-      socket.on('register', (filename: string, username: string) => {
-        if (!(filename in this.#documents)) {
-          this.#documents[filename] = {
-            filename,
-            users: [{ username, client: socket.id }],
-            content: new Y.Doc(),
-          };
+      socket.on(
+        'register',
+        async (
+          filename: string,
+          callback: (response: ServerResponse) => ServerResponse
+        ) => {
+          log.info(
+            `client ${socket.id} requesting registration to edit document '${filename}'`
+          );
+          if (!(filename in this.#documents)) {
+            log.info(`responding to ${socket.id}: no such file`);
+            callback({
+              code: Editing.NOFILE,
+              message: `no such file ${filename}`,
+            });
+            return;
+          }
+          // register client and add the socket to a document specific room
+          this.#documents[filename].clients.push(socket.id);
+          await socket.join(filename);
+          log.info(`responding to ${socket.id}: OK`);
+
+          callback({
+            code: Editing.OK,
+            message: 'OK',
+          });
         }
-        logger.info(this.#documents, 'registered a new document');
-      });
+      );
 
       /* socket.on('update', (update: Uint8Array, editor: number) => {
         log.info('update', update, editor);

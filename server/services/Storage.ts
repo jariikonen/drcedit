@@ -2,22 +2,22 @@
 import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import logger from '../utils/logger';
-import { File, isFile } from '../types';
+import { Document, isDocument } from '../types';
 import { STORAGE_DIR, STORAGE_FILES_PATH } from '../utils/config';
 
 const log = logger.child({ caller: 'Storage' });
 
 export default class Storage extends EventEmitter {
-  #files: File[] = [];
+  #documents: Document[] = [];
 
   #initialized = false;
 
   constructor() {
     super();
-    let files: File[] = [];
+    let documents: Document[] = [];
     try {
       const data = fs.readFileSync(STORAGE_FILES_PATH, 'utf-8');
-      files = Storage.#parseFileData(data);
+      documents = Storage.#parseDocumentData(data);
     } catch (error: unknown) {
       if (Storage.#isNodeError(error) && error.code === 'ENOENT') {
         Storage.#createStorageDir();
@@ -25,9 +25,9 @@ export default class Storage extends EventEmitter {
       if (error instanceof Error) log.error(error.stack);
       else log.error(error);
     }
-    this.#files = files;
+    this.#documents = documents;
     this.#initialized = true;
-    log.debug(this.#files, 'Storage initialized - found these files:');
+    log.debug(this.#documents, 'Storage initialized - found these documents:');
   }
 
   static #isNodeError(error: unknown): error is NodeJS.ErrnoException {
@@ -46,26 +46,26 @@ export default class Storage extends EventEmitter {
     }
   }
 
-  static #parseFileData(data: string): File[] {
+  static #parseDocumentData(data: string): Document[] {
     const array: unknown = JSON.parse(data);
     if (!Array.isArray(array)) {
       throw new Error('not an array');
     }
-    const parsedArray = array.map((file) => {
-      if (!isFile(file)) {
-        throw new Error(`not a File object: '${JSON.stringify(file)}'`);
+    const parsedArray = array.map((document) => {
+      if (!isDocument(document)) {
+        throw new Error(`not a Document object: '${JSON.stringify(document)}'`);
       }
-      return file;
+      return document;
     });
     return parsedArray;
   }
 
-  getFiles() {
+  getDocuments() {
     if (!this.#initialized) {
-      return this.#waitUntilInitialized<File[]>(() => this.#files);
+      return this.#waitUntilInitialized<Document[]>(() => this.#documents);
     }
     return new Promise((resolve) => {
-      resolve(this.#files);
+      resolve(this.#documents);
     });
   }
 
@@ -86,25 +86,29 @@ export default class Storage extends EventEmitter {
     });
   }
 
-  createFile(filename: string) {
-    const newFile = {
-      filename,
+  createDocument(documentName: string) {
+    const newDocument = {
+      documentName,
       content: null,
     };
     const callback = () => {
-      this.#files.push(newFile);
-      this.#writeFiles();
-      return newFile;
+      this.#documents.push(newDocument);
+      this.#writeDocuments();
+      return newDocument;
     };
     if (!this.#initialized) {
-      return this.#waitUntilInitialized<File>(callback);
+      return this.#waitUntilInitialized<Document>(callback);
     }
     return new Promise((resolve) => {
       resolve(callback());
     });
   }
 
-  #writeFiles() {
-    fs.writeFileSync(STORAGE_FILES_PATH, JSON.stringify(this.#files), 'utf-8');
+  #writeDocuments() {
+    fs.writeFileSync(
+      STORAGE_FILES_PATH,
+      JSON.stringify(this.#documents),
+      'utf-8'
+    );
   }
 }

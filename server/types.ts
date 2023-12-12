@@ -1,17 +1,6 @@
 import * as Y from 'yjs';
 import { NetworkInterfaceInfoIPv4 } from 'os';
 
-export interface UserRegistration {
-  username: string;
-  client: string;
-}
-
-export interface DocumentRegistration {
-  filename: string;
-  users: UserRegistration[];
-  content: Y.Doc | null;
-}
-
 export interface NetworkInfo extends NetworkInterfaceInfoIPv4 {
   broadcast: string;
   interface: string;
@@ -47,15 +36,41 @@ export interface NodeInfo extends CoordinatorMsgNodeInfo {
 
 export type NodeList = string[];
 
-export interface File {
-  filename: string;
+export interface Document {
+  /** Unique name for the file. */
+  documentName: string;
+
+  /** Object holding the document contents. */
   content: Y.Doc | null;
 }
 
-export function isFile(obj: unknown): obj is File {
+/** Type guard for the Document type. */
+export function isDocument(obj: unknown): obj is Document {
   return (
-    (obj as File).filename !== undefined &&
-    (obj as File).content !== undefined &&
-    ((obj as File).content === null || (obj as File).content instanceof Y.Doc)
+    (obj as Document).documentName !== undefined &&
+    (obj as Document).content !== undefined &&
+    ((obj as Document).content === null ||
+      (obj as Document).content instanceof Y.Doc)
   );
+}
+
+/** Used for recording documents on the Editing server. */
+export interface DocumentRegistration {
+  /** Document to be registered. */
+  document: Document;
+
+  /** IP address of the Editing server that the client can contact. */
+  clientContactNode: string;
+
+  /** List of Editing server nodes assigned to this document. */
+  nodes: string[];
+
+  /** List of clients (socket.io socket.ids) currently editing the document. */
+  clients: string[];
+}
+
+/** Used for pointing the correct editing server to the client. */
+export interface EditingServerData {
+  /** IP address of the editing server node the client must use. */
+  contactNode: string;
 }

@@ -9,39 +9,39 @@ import {
   TableRow,
   Link,
 } from '@mui/material';
-import { File } from '../../../server/types';
-import FilenameInput from './FilenameInput';
-import fileService from '../../util/services/file';
+import { Document } from '../../../server/types';
+import DocumentNameInput from './DocumentNameInput';
+import documentService from '../../util/services/document';
 
-interface FileListProps {
-  setFile: React.Dispatch<React.SetStateAction<File | null>>;
+interface DocumentListProps {
+  setDocument: React.Dispatch<React.SetStateAction<Document | null>>;
 }
 
-function FileList({ setFile }: FileListProps) {
-  const [fileList, setFileList] = useState<File[]>([]);
-  const [newFileName, setNewFileName] = useState<string | null>(null);
+function DocumentList({ setDocument }: DocumentListProps) {
+  const [documentList, setDocumentList] = useState<Document[]>([]);
+  const [newDocumentName, setNewDocumentName] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchFiles = async () => {
-      const files = await fileService.getAll();
-      setFileList(files);
+    const fetchDocuments = async () => {
+      const documents = await documentService.getAll();
+      setDocumentList(documents);
     };
     // eslint-disable-next-line no-void
-    void fetchFiles();
+    void fetchDocuments();
   }, []);
 
   useEffect(() => {
-    const createFile = async (filename: string) => {
-      const file = await fileService.createFile(filename);
-      if (!file) {
+    const createDocument = async (documentName: string) => {
+      const document = await documentService.createDocument(documentName);
+      if (!document) {
         throw new Error('invalid response from server');
       }
-      console.log('server responded with a new file object:', file);
-      setFile(file);
+      console.log('server responded with a new document object:', document);
+      setDocument(document);
     };
-    if (newFileName) {
+    if (newDocumentName) {
       // eslint-disable-next-line no-void
-      void createFile(newFileName);
+      void createDocument(newDocumentName);
     }
   });
 
@@ -58,25 +58,25 @@ function FileList({ setFile }: FileListProps) {
         columnSpacing={{ xs: 0.7 }}
         maxWidth="50vw"
       >
-        {fileList.length > 0 ? (
+        {documentList.length > 0 ? (
           <Grid item xs={12}>
             <Typography
               align="left"
               variant="h5"
               style={{ marginBottom: '1rem' }}
             >
-              Select a file to edit
+              Select a document to edit
             </Typography>
             <Table style={{ marginBottom: '1rem' }}>
               <TableBody>
-                {Object.values(fileList).map((file: File) => (
+                {Object.values(documentList).map((document: Document) => (
                   <TableRow>
                     <Link
                       component="button"
                       variant="body2"
-                      onClick={() => setFile(file)}
+                      onClick={() => setDocument(document)}
                     >
-                      {file.filename}
+                      {document.documentName}
                     </Link>
                   </TableRow>
                 ))}
@@ -90,16 +90,16 @@ function FileList({ setFile }: FileListProps) {
               variant="h5"
               style={{ marginBottom: '1rem' }}
             >
-              There are currently no files
+              There are currently no documents
             </Typography>
           </Grid>
         )}
         <Grid item xs={12}>
-          <FilenameInput setFilename={setNewFileName} />
+          <DocumentNameInput setDocumentName={setNewDocumentName} />
         </Grid>
       </Grid>
     </Box>
   );
 }
 
-export default FileList;
+export default DocumentList;

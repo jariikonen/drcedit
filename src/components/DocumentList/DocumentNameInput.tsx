@@ -2,22 +2,22 @@ import { useState } from 'react';
 import { Button, Grid } from '@mui/material';
 import NonEmptyInput from '../NonEmptyInput';
 
-interface FileNameInputProps {
-  setFilename: React.Dispatch<React.SetStateAction<string | null>>;
+interface DocumentNameInputProps {
+  setDocumentName: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-function FilenameInput({ setFilename }: FileNameInputProps) {
+function DocumentNameInput({ setDocumentName }: DocumentNameInputProps) {
   const [inputVisible, setInputVisible] = useState(false);
 
-  const [filenameValue, setFilenameValue] = useState<string | null>(null);
-  const [filenameError, setFilenameError] = useState<string | null>(null);
-  const filenameErrorStr = 'filename must not be empty';
+  const [docNameValue, setDocNameValue] = useState<string | null>(null);
+  const [docNameError, setDocNameError] = useState<string | null>(null);
+  const docNameErrorStr = 'document name must not be empty';
 
   function handleSubmit(e: React.SyntheticEvent) {
-    if (filenameValue) {
-      setFilename(filenameValue);
+    if (docNameValue) {
+      setDocumentName(docNameValue);
     } else {
-      setFilenameError(filenameErrorStr);
+      setDocNameError(docNameErrorStr);
     }
     e.preventDefault();
   }
@@ -29,11 +29,11 @@ function FilenameInput({ setFilename }: FileNameInputProps) {
           <Grid item>
             <NonEmptyInput
               autoFocus
-              label="Filename"
-              errorStr={filenameErrorStr}
-              errorValue={filenameError}
-              setError={setFilenameError}
-              setValue={setFilenameValue}
+              label="Document name"
+              errorStr={docNameErrorStr}
+              errorValue={docNameError}
+              setError={setDocNameError}
+              setValue={setDocNameValue}
             />
           </Grid>
           <Grid item>
@@ -65,9 +65,9 @@ function FilenameInput({ setFilename }: FileNameInputProps) {
       type="submit"
       onClick={() => setInputVisible(true)}
     >
-      New file
+      New document
     </Button>
   );
 }
 
-export default FilenameInput;
+export default DocumentNameInput;

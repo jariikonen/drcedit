@@ -1,10 +1,15 @@
 import * as Y from 'yjs';
 import { NetworkInterfaceInfoIPv4 } from 'os';
 
+export interface UserRegistration {
+  username: string;
+  client: string;
+}
+
 export interface DocumentRegistration {
-  name: string;
-  users: [string];
-  document: Y.Doc;
+  filename: string;
+  users: UserRegistration[];
+  content: Y.Doc | null;
 }
 
 export interface NetworkInfo extends NetworkInterfaceInfoIPv4 {

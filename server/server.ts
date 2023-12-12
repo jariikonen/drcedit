@@ -7,6 +7,7 @@ import Messaging from './services/Messaging.ts';
 import Storage from './services/Storage.ts';
 import Gateway from './services/Gateway.ts';
 import { NodeInfo } from './types.ts';
+import Editing from './services/Editing.ts';
 
 const log = logger.child({ caller: 'server' });
 
@@ -60,6 +61,9 @@ const storage = new Storage();
     );
   })
   .catch((error: Error) => log.error(error.stack)); */
+
+// eslint-disable-next-line no-new
+new Editing(HOST, storage);
 
 // eslint-disable-next-line no-new
 new Gateway(storage);

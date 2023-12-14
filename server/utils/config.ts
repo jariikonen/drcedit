@@ -26,3 +26,7 @@ export const GATEWAY_HTTP_PORT = parseInt(
   `${process.env.GATEWAY_HTTP_PORT ?? 8080}`,
   10
 );
+export const EDITING_NUM_OF_NODES = parseInt(
+  `${process.env.EDITING_NUM_OF_NODES ?? 3}`,
+  10
+);

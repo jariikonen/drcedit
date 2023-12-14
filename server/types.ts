@@ -7,21 +7,21 @@ export interface NetworkInfo extends NetworkInterfaceInfoIPv4 {
   interface: string;
 }
 
-export type Role = 'MESSAGE_BROKER' | 'GATEWAY' | 'EDITING';
+export type Role = 'MESSAGE_BROKER' | 'GATEWAY';
 
-export interface CoordinatorMsgNodeInfo {
+export interface MessageNodeInfo {
   address: string;
   roles: Role[];
 }
 
 export function isRole(role: unknown): role is Role {
-  return role === 'MESSAGE_BROKER' || role === 'GATEWAY' || role === 'EDITING';
+  return role === 'MESSAGE_BROKER' || role === 'GATEWAY';
 }
 
-export function isCoordinatorMsgNodeInfo(
+export function isMessageNodeInfo(
   nodeInfo: unknown
-): nodeInfo is CoordinatorMsgNodeInfo {
-  const typecast = nodeInfo as CoordinatorMsgNodeInfo;
+): nodeInfo is MessageNodeInfo {
+  const typecast = nodeInfo as MessageNodeInfo;
   return (
     typecast.address !== undefined &&
     typecast.roles !== undefined &&
@@ -31,7 +31,7 @@ export function isCoordinatorMsgNodeInfo(
   );
 }
 
-export interface NodeInfo extends CoordinatorMsgNodeInfo {
+export interface NodeInfo extends MessageNodeInfo {
   priority: number;
 }
 
@@ -102,4 +102,14 @@ export function isEditingServerData(obj: unknown): obj is EditingServerData {
       (obj as EditingServerData).documentName) !== undefined &&
     typeof (obj as EditingServerData).documentName === 'string'
   );
+}
+
+export interface EditingNodesData {
+  clientContactNode: string;
+  editingNodes: string[];
+}
+
+export interface RoleData {
+  address: string;
+  priority: number;
 }

@@ -1,27 +1,35 @@
 /* eslint-disable import/extensions */
 import { EventEmitter } from 'node:events';
+import { Server } from 'node:http';
 import express, { Express, Router, Request } from 'express';
 import logger from '../utils/logger';
 import { GATEWAY_HTTP_PORT } from '../utils/config';
 import { HOST } from '../utils/networkinfo';
 import Storage from './Storage';
 import Editing from './Editing';
+import { Document, EditingServerData } from '../types';
+import LoadBalancing from './LoadBalancing';
 
 const log = logger.child({ caller: 'Gateway' });
 
 export default class Gateway extends EventEmitter {
   #app: Express;
 
+  #expressInstance: Server;
+
   #storage: Storage;
 
   #editing: Editing;
 
+  #loadBalancer: LoadBalancing;
+
   #documentRouter: Router;
 
-  constructor(storage: Storage, editing: Editing) {
+  constructor(storage: Storage, editing: Editing, loadBalancer: LoadBalancing) {
     super();
     this.#storage = storage;
     this.#editing = editing;
+    this.#loadBalancer = loadBalancer;
 
     this.#app = express();
 
@@ -31,7 +39,7 @@ export default class Gateway extends EventEmitter {
     this.#documentRouter = this.#initializeDocumentRouter();
     this.#app.use('/api/documents', this.#documentRouter);
 
-    this.#app.listen(GATEWAY_HTTP_PORT, HOST, () =>
+    this.#expressInstance = this.#app.listen(GATEWAY_HTTP_PORT, HOST, () =>
       log.info(`express server running on ${HOST}:${GATEWAY_HTTP_PORT}`)
     );
   }
@@ -81,7 +89,7 @@ export default class Gateway extends EventEmitter {
             document,
             'created a new document - responding with the new document object'
           );
-          res.send(this.#editing.getEditingNode(document));
+          res.send(this.#getEditingNode(document));
         })
         .catch((error) => {
           if (error instanceof Error) log.error(error.stack);
@@ -109,7 +117,7 @@ export default class Gateway extends EventEmitter {
             res.send('document not found');
             return;
           }
-          const serverData = this.#editing.getEditingNode(document);
+          const serverData = this.#getEditingNode(document);
           log.info(serverData, 'sending editing server data');
           res.send(serverData);
         })
@@ -120,5 +128,26 @@ export default class Gateway extends EventEmitter {
     });
 
     return router;
+  }
+
+  #getEditingNode(document: Document): EditingServerData {
+    const contactNode = this.#editing.getContactNode(document);
+    if (contactNode) {
+      return {
+        contactNode,
+        documentID: document.documentID,
+        documentName: document.documentName,
+      };
+    }
+    const editingNodesData = this.#loadBalancer.getEditingNodes();
+    return {
+      contactNode: editingNodesData.clientContactNode,
+      documentID: document.documentID,
+      documentName: document.documentName,
+    };
+  }
+
+  close() {
+    this.#expressInstance.close();
   }
 }

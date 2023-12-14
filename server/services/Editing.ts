@@ -5,11 +5,11 @@ import { Server, Socket } from 'socket.io';
 import { EventEmitter } from 'node:events';
 import * as Y from 'yjs';
 import logger from '../utils/logger.ts';
-import { DocumentRegistration, EditingServerData, Document } from '../types.ts';
+import { DocumentRegistration, Document, EditingNodesData } from '../types.ts';
 import { GATEWAY_HTTP_PORT, SOCKETIO_PORT } from '../utils/config.ts';
 import { HOST } from '../utils/networkinfo.ts';
 import Storage from './Storage.ts';
-import LoadBalancing from './LoadBalancing.ts';
+import Messaging from './Messaging.ts';
 
 const log = logger.child({ caller: 'Editing' });
 
@@ -30,14 +30,14 @@ export default class Editing extends EventEmitter {
 
   #storage: Storage;
 
-  #loadBalancer: LoadBalancing;
+  #messaging: Messaging | null;
 
   #documents: Record<string, DocumentRegistration> = {};
 
   constructor(
     gatewayAddress: string,
     storage: Storage,
-    loadBalancer: LoadBalancing
+    messaging: Messaging | null
   ) {
     super();
     this.#ioServer = new Server({
@@ -46,9 +46,8 @@ export default class Editing extends EventEmitter {
       },
     });
     this.#storage = storage;
-    this.#loadBalancer = loadBalancer;
-    log.debug(this.#storage); // TO SUPPRESS ESLINT ERROR - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    log.debug(this.#loadBalancer); // TO SUPPRESS ESLINT ERROR - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    this.#messaging = messaging;
+    log.debug(this.#messaging); // TO SUPPRESS ESLINT ERROR!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     this.#initializeIoServer();
   }
 
@@ -167,27 +166,34 @@ export default class Editing extends EventEmitter {
     log.info(`editing server listening on ${HOST}:${SOCKETIO_PORT}`);
   }
 
-  getEditingNode(document: Document): EditingServerData {
-    if (!(document.documentID in this.#documents)) {
-      this.#assignNodes(document);
-    }
-    const docRegistration = this.#documents[document.documentID];
-    return {
-      contactNode: docRegistration.clientContactNode,
-      documentID: docRegistration.document.documentID,
-      documentName: docRegistration.document.documentName,
-    };
+  getContactNode(document: Document): string | null {
+    return document.documentID in this.#documents
+      ? this.#documents[document.documentID].clientContactNode
+      : null;
   }
 
-  #assignNodes(document: Document) {
+  assignNodes(document: Document, nodes: EditingNodesData) {
+    if (document.documentID in this.#documents)
+      throw new Error(
+        'nodes already assigned for document - use getContactNode() instead'
+      );
     log.info(
-      `assigning editing nodes for document '${document.documentID}' (not fully implemented yet)`
+      `assigning editing nodes for document '${
+        document.documentID
+      }': ${JSON.stringify(nodes)} - FINISH THIS METHOD!!!!!!!!!!!!!!!!!!!!`
     );
-    this.#documents[document.documentID] = {
-      document,
-      clientContactNode: HOST,
-      nodes: [HOST],
-      clients: [],
-    };
+    if (!(document.documentID in this.#documents)) {
+      this.#documents[document.documentID] = {
+        document,
+        clientContactNode: HOST,
+        nodes: [HOST],
+        clients: [],
+      };
+    }
+  }
+
+  close() {
+    log.info('closing editing server');
+    this.#ioServer.close();
   }
 }

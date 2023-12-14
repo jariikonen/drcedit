@@ -13,14 +13,13 @@ import {
   HOST,
   PRIORITY,
   getPriorityNumber,
-  validAddress,
 } from '../utils/networkinfo.ts';
 import logger from '../utils/logger.ts';
 import {
-  CoordinatorMsgNodeInfo,
+  MessageNodeInfo,
   NodeInfo,
-  NodeList,
-  isCoordinatorMsgNodeInfo,
+  RoleData,
+  isMessageNodeInfo,
 } from '../types.ts';
 
 const log = logger.child({ caller: 'Discovery' });
@@ -39,8 +38,7 @@ type DiscoveryResponseType = 'HELLO' | 'COORDINATOR' | 'ASSIGN';
 interface DiscoveryParseResult {
   type: DiscoveryMessageType;
   parts: string[];
-  nodeList?: NodeList;
-  nodeInfo?: CoordinatorMsgNodeInfo[];
+  nodeInfo?: MessageNodeInfo[];
   responseType?: DiscoveryResponseType;
 }
 
@@ -62,7 +60,7 @@ interface DiscoveryParseResult {
  * interval can be set using the config variable DISCOVERY_MSG_TIMEOUT.
  *
  * When the server receives information about new nodes it will add them to
- * its nodes array and emit a 'newNodes' event. A copy of the nodes array is
+ * its nodes array and emit a 'nodes' event. A copy of the nodes array is
  * passed as an event parameter.
  *
  * When receiving information about new nodes the server also starts a leader
@@ -96,16 +94,29 @@ interface DiscoveryParseResult {
  * Server is started by calling the bind method, which binds it to a port.
  */
 export default class Discovery extends EventEmitter {
+  /** Data about the currently known nodes. */
   #nodes: NodeInfo[] = [];
 
+  #messageBroker: RoleData | null = null;
+
+  #gateway: RoleData | null = null;
+
+  /** Sending of JOIN messages can be stopped by clearing this interval. */
   #joinInterval: NodeJS.Timeout | null = null;
 
+  /** Sending of HELLO messages can be stopped by clearing this interval. */
   #helloInterval: Record<string, NodeJS.Timeout> = {};
 
+  /** Sending of HELLO messages is stopped after this timeout expires. */
   #helloTimeout: Record<string, NodeJS.Timeout> = {};
 
+  /** Node.js dgram.Socket for sending messages to other nodes. */
   #socket: dgram.Socket;
 
+  /**
+   * After finding another node a pre-election timeout is started. An election
+   * is started when the timeout expires.
+   */
   #preElectionTimeout: NodeJS.Timeout | null = null;
 
   #electionInterval: Record<string, NodeJS.Timeout> = {};
@@ -262,8 +273,8 @@ export default class Discovery extends EventEmitter {
         'node list missing - HELLO message must contain a node list'
       );
     }
-    const nodeList = Discovery.#parseNodeList(msgSplit[1]);
-    return { type, parts: msgSplit, nodeList };
+    const nodeInfo = Discovery.#parseMessageNodeInfo(msgSplit[1]);
+    return { type, parts: msgSplit, nodeInfo };
   }
 
   static #parseAck(
@@ -306,8 +317,8 @@ export default class Discovery extends EventEmitter {
         'invalid ACK message - an ACK HELLO message must contain a node list'
       );
     }
-    const nodeList = Discovery.#parseNodeList(msgSplit[2]);
-    return { type, parts: msgSplit, nodeList, responseType };
+    const nodeInfo = Discovery.#parseMessageNodeInfo(msgSplit[2]);
+    return { type, parts: msgSplit, nodeInfo, responseType };
   }
 
   static #parseAckCoordinator(
@@ -320,76 +331,61 @@ export default class Discovery extends EventEmitter {
         'invalid ACK message - an ACK COORDINATOR message must contain a node data section'
       );
     }
-    const nodeInfo = Discovery.#parseCoordMsgNodeData(msgSplit[2]);
+    const nodeInfo = Discovery.#parseMessageNodeInfo(msgSplit[2]);
     return { type, parts: msgSplit, nodeInfo, responseType };
   }
 
-  static #parseNodeList(str: string): NodeList {
-    const nodeStrArray: unknown = JSON.parse(str);
-    if (!Array.isArray(nodeStrArray)) {
-      throw new Error(`wrong type for a node list - not an array '${str}'`);
-    }
-    const nodeList: NodeList = [];
-    if (nodeStrArray.length > 0) {
-      nodeStrArray.forEach((nodeStr) => {
-        if (typeof nodeStr !== 'string') {
-          throw new Error(
-            `wrong type of element on node list - not a string '${nodeStr}'`
-          );
-        }
-        if (!validAddress(nodeStr)) {
-          throw new Error(
-            `wrong type of element on node list - not a valid IP address '${nodeStr}'`
-          );
-        }
-        nodeList.push(nodeStr);
-      });
-    }
-    return nodeList;
-  }
-
   static #parseCoordinator(msgSplit: string[], type: DiscoveryMessageType) {
-    const nodeInfo = Discovery.#parseCoordMsgNodeData(msgSplit[1]);
+    const nodeInfo = Discovery.#parseMessageNodeInfo(msgSplit[1]);
     return { type, parts: msgSplit, nodeInfo };
   }
 
-  static #parseCoordMsgNodeData(str: string): CoordinatorMsgNodeInfo[] {
+  static #parseMessageNodeInfo(str: string): MessageNodeInfo[] {
     const nodeData: unknown = JSON.parse(str);
     if (!Array.isArray(nodeData)) {
       throw new Error(`wrong type for a node list - not an array '${str}'`);
     }
-    const validNodeData: CoordinatorMsgNodeInfo[] = nodeData.map(
-      (node: object) => {
-        if (!isCoordinatorMsgNodeInfo(node)) {
-          throw new Error(
-            `not a valid CoordinatorMsgNodeInfo ${JSON.stringify(node)}`
-          );
-        }
-        return node;
+    const validNodeData: MessageNodeInfo[] = nodeData.map((node: object) => {
+      if (!isMessageNodeInfo(node)) {
+        throw new Error(`not a valid MessageNodeInfo ${JSON.stringify(node)}`);
       }
-    );
+      return node;
+    });
     return validNodeData;
   }
 
   /**
    * NOTICE! This is the only place to add nodes to the object's nodes array!
    */
-  #addNodes(nodeList: NodeList) {
+  #addNodes(nodeList: MessageNodeInfo[]) {
+    log.debug(this.#nodes, 'current known nodes:');
+    const addingForTheFirstTime = this.#nodes.length > 1;
     let newNodes = false;
-    nodeList.forEach((address) => {
-      if (
-        address !== HOST &&
-        !this.#nodes.find((node) => node.address === address)
-      ) {
+    nodeList.forEach((node) => {
+      if (node.address === HOST) {
+        this.#nodes[this.#nodes.findIndex((n) => n.address === HOST)] = {
+          ...node,
+          priority: PRIORITY,
+        };
+        log.debug(`updated node data of self:\n\t${JSON.stringify(node)}`);
+      } else if (!this.#nodes.find((n) => n.address === node.address)) {
+        log.debug(
+          `found new node from the node data:\n\t${JSON.stringify(node)}`
+        );
         newNodes = true;
         this.#nodes.push({
-          address,
-          priority: getPriorityNumber(address, NETWORK_INFO.netmask),
-          roles: [],
+          ...node,
+          priority: getPriorityNumber(node.address, NETWORK_INFO.netmask),
         });
       }
     });
-    if (newNodes) {
+    const ownRoleChanged = this.#findRoles(nodeList);
+    if (ownRoleChanged) {
+      log.info('found a new role for self');
+      this.emit('noles', [...this.#nodes]);
+      this.emit('roles', [...this.#nodes], '#addNodes');
+    } else if (newNodes && this.#isHighestOrLowestPriority(nodeList)) {
+      log.info('starting the pre-election timeout');
       if (this.#preElectionTimeout) {
         clearTimeout(this.#preElectionTimeout);
       }
@@ -397,8 +393,89 @@ export default class Discovery extends EventEmitter {
         log.info('pre-election timeout expired');
         this.#startElection();
       }, DISCOVERY_PREELECTION_TIMEOUT);
-      this.emit('newNodes', [...this.#nodes]);
+
+      this.emit('nodes', [...this.#nodes]);
     }
+    if (addingForTheFirstTime)
+      this.emit('roles', [...this.#nodes], '#addNodes');
+  }
+
+  #findRoles(nodeList: MessageNodeInfo[]): boolean {
+    const messageBroker = nodeList.find((node) =>
+      node.roles.includes('MESSAGE_BROKER')
+    );
+    const gateway = nodeList.find((node) => node.roles.includes('GATEWAY'));
+    if (messageBroker && gateway) {
+      const ownMBRoleChanged = this.#setMessageBrokerNode(messageBroker);
+      const ownGWRoleChanged = this.#setGatewayNode(gateway);
+      if (ownGWRoleChanged || ownMBRoleChanged) {
+        if (ownGWRoleChanged) log.info('my new role is: gateway');
+        if (ownMBRoleChanged) log.info('my new role is: message broker');
+        return true;
+      }
+    } else if ((messageBroker && !gateway) ?? (!messageBroker && gateway)) {
+      throw new Error(
+        'one of the roles is missing from the node data - this should not happen'
+      );
+    } else if (!messageBroker && !gateway) {
+      log.debug(
+        nodeList,
+        'no gateway or message broker roles were set in the node data'
+      );
+    }
+    return false;
+  }
+
+  #setMessageBrokerNode(node: MessageNodeInfo): boolean {
+    if (this.#messageBroker?.address !== node.address) {
+      this.#messageBroker = {
+        address: node.address,
+        priority: getPriorityNumber(node.address, NETWORK_INFO.netmask),
+      };
+      log.info(
+        `new message broker node found:\n\t${JSON.stringify(
+          this.#messageBroker
+        )}`
+      );
+      if (node.address === HOST) return true;
+    }
+    return false;
+  }
+
+  #setGatewayNode(node: MessageNodeInfo): boolean {
+    if (this.#gateway?.address !== node.address) {
+      this.#gateway = {
+        address: node.address,
+        priority: getPriorityNumber(node.address, NETWORK_INFO.netmask),
+      };
+      log.info(`new gateway node found:\n\t${JSON.stringify(this.#gateway)}`);
+      if (node.address === HOST) return true;
+    }
+    return false;
+  }
+
+  #isHighestOrLowestPriority(nodeList: MessageNodeInfo[]): boolean {
+    if (this.#messageBroker && this.#gateway) {
+      const value = Boolean(
+        nodeList.find((node) => {
+          const priority = getPriorityNumber(
+            node.address,
+            NETWORK_INFO.netmask
+          );
+          if (this.#messageBroker && this.#gateway)
+            return (
+              priority > this.#messageBroker.priority ||
+              priority < this.#gateway.priority
+            );
+          return true;
+        })
+      );
+      if (value) log.debug('the highest or lowest priority found');
+      else log.debug('the highest or lowest priority was not found');
+      return value;
+    }
+    log.debug('the highest or lowest priority found');
+    return true;
   }
 
   #handleJoin(remote: dgram.RemoteInfo): void {
@@ -410,13 +487,21 @@ export default class Discovery extends EventEmitter {
     // host) and there is not a HELLO message interval for this node (meaning
     // that the node has not been added to the nodes list yet)
     if (remote.address !== HOST && !(remote.address in this.#helloInterval)) {
-      this.#addNodes([remote.address]);
+      this.#addNodes([
+        {
+          address: remote.address,
+          roles: [],
+        },
+      ]);
 
       // and start sending HELLO messages to that node
       if (!(remote.address in this.#helloInterval)) {
         const hello = Buffer.from(
           `HELLO ${JSON.stringify([
-            ...this.#nodes.map((node) => node.address),
+            ...this.#nodes.map((node) => ({
+              address: node.address,
+              roles: node.roles,
+            })),
           ])}`
         );
         log.debug(
@@ -451,20 +536,27 @@ export default class Discovery extends EventEmitter {
     parsedMsg: DiscoveryParseResult,
     remote: dgram.RemoteInfo
   ): void {
-    log.info(`received HELLO from ${remote.address}:${remote.port}`);
+    log.info(
+      `received HELLO from ${remote.address}:${
+        remote.port
+      }:\n\t${parsedMsg.parts.join(' ')}`
+    );
 
     // stop sending JOIN messages
     this.#stopSendingJoin();
 
     // add any new nodes in the message to the nodes array
-    if (parsedMsg.nodeList) {
-      this.#addNodes(parsedMsg.nodeList);
+    if (parsedMsg.nodeInfo) {
+      this.#addNodes(parsedMsg.nodeInfo);
     }
 
     // send an ACK HELLO message
     const ack = Buffer.from(
       `ACK HELLO ${JSON.stringify([
-        ...this.#nodes.map((node) => node.address),
+        ...this.#nodes.map((node) => ({
+          address: node.address,
+          roles: node.roles,
+        })),
       ])}`
     );
     this.#socket.send(ack, 0, ack.length, remote.port, remote.address);
@@ -533,8 +625,8 @@ export default class Discovery extends EventEmitter {
     }
 
     // add any new nodes in message to nodes array
-    if (parsedMsg.nodeList) {
-      this.#addNodes(parsedMsg.nodeList);
+    if (parsedMsg.nodeInfo) {
+      this.#addNodes(parsedMsg.nodeInfo);
     }
 
     // stop sending JOIN messages
@@ -591,6 +683,11 @@ export default class Discovery extends EventEmitter {
   #sendElection(higherPriorities: NodeInfo[]): void {
     const election = Buffer.from('ELECTION');
     higherPriorities.forEach((node) => {
+      log.debug(`setting election interval and timeout for ${node.address}`);
+
+      if (this.#electionInterval[node.address]) {
+        clearInterval(this.#electionInterval[node.address]);
+      }
       this.#electionInterval[node.address] = setInterval(() => {
         this.#socket.send(
           election,
@@ -603,6 +700,9 @@ export default class Discovery extends EventEmitter {
       }, DISCOVERY_MESSAGE_INTERVAL);
 
       // stop sending messages after a timeout
+      if (this.#electionTimeout[node.address]) {
+        clearInterval(this.#electionTimeout[node.address]);
+      }
       this.#electionTimeout[node.address] = setTimeout(() => {
         log.info(`ELECTION message to ${node.address} timed out`);
         clearInterval(this.#electionInterval[node.address]);
@@ -652,7 +752,7 @@ export default class Discovery extends EventEmitter {
     // update nodes array and emit a NEW ROLES event
     this.#nodes = nodes;
     log.debug(this.#nodes, 'updated the roles');
-    this.emit('newRoles', [...this.#nodes], '#setRoles');
+    this.emit('roles', [...this.#nodes], '#setRoles');
   }
 
   #sendCoordinator() {
@@ -716,14 +816,6 @@ export default class Discovery extends EventEmitter {
     log.debug(`OK message content (sent):\n\t'${ok.toString('utf-8')}'`);
   }
 
-  #stopPreElectionTimeout() {
-    if (this.#preElectionTimeout) {
-      clearTimeout(this.#preElectionTimeout);
-      this.#preElectionTimeout = null;
-      log.info('cleared the pre-election timeout');
-    }
-  }
-
   #handleOK(remote: dgram.RemoteInfo): void {
     this.#receivedOK = true;
 
@@ -742,22 +834,33 @@ export default class Discovery extends EventEmitter {
   }
 
   #stopElection(): void {
-    // stop the election process, i.e., stop sending ELECTION messages to any node
-    Object.keys(this.#electionInterval).forEach((key) => {
-      clearInterval(this.#electionInterval[key]);
-      delete this.#electionInterval[key];
-    });
-    log.debug(this.#electionInterval, 'stopped sending ELECTION messages');
-
+    // stop the pre-election timeout
+    if (this.#preElectionTimeout) {
+      clearTimeout(this.#preElectionTimeout);
+      this.#preElectionTimeout = null;
+      log.debug(this.#preElectionTimeout, 'cleared the pre-election timeout');
+    }
+    // stop the election process, i.e., stop sending ELECTION messages
+    if (Object.keys(this.#electionInterval).length > 0) {
+      Object.keys(this.#electionInterval).forEach((key) => {
+        log.debug(`clearing election message interval for ${key}`);
+        clearInterval(this.#electionInterval[key]);
+        delete this.#electionInterval[key];
+      });
+      log.debug(this.#electionInterval, 'stopped sending ELECTION messages');
+    }
     // and stop excpecting a response to previously sent ELECTION messages
-    Object.keys(this.#electionTimeout).forEach((key) => {
-      clearTimeout(this.#electionTimeout[key]);
-      delete this.#electionTimeout[key];
-    });
-    log.debug(
-      this.#electionTimeout,
-      'stopped waiting a response to previously sent ELECTION messages'
-    );
+    if (Object.keys(this.#electionTimeout).length > 0) {
+      Object.keys(this.#electionTimeout).forEach((key) => {
+        log.debug(`clearing election message timeout for ${key}`);
+        clearTimeout(this.#electionTimeout[key]);
+        delete this.#electionTimeout[key];
+      });
+      log.debug(
+        this.#electionTimeout,
+        'stopped waiting a response to previously sent ELECTION messages'
+      );
+    }
   }
 
   #handleCoordinator(
@@ -773,7 +876,6 @@ export default class Discovery extends EventEmitter {
       throw new Error(`COORDINATOR message from ${remote.address} is INVALID`);
     }
 
-    this.#stopPreElectionTimeout();
     this.#stopElection();
 
     // respond with ACK COORDINATOR
@@ -787,12 +889,12 @@ export default class Discovery extends EventEmitter {
     log.info(`sending ACK COORDINATOR to ${remote.address}:${remote.port}`);
     log.debug(`ACK message content (sent):\n\t'${ack.toString('utf-8')}'`);
 
-    // update the node list and emit newRoles event
+    // update the node list and emit roles event
     this.#updateRoles(parsedMsg.nodeInfo);
-    this.emit('newRoles', this.#nodes, '#handleCoordinator');
+    this.emit('roles', [...this.#nodes], '#handleCoordinator');
   }
 
-  #updateRoles(nodeData: CoordinatorMsgNodeInfo[]) {
+  #updateRoles(nodeData: MessageNodeInfo[]) {
     if (this.#nodes.length !== nodeData.length) {
       log.warn(
         `the node data received in a COORDINATOR message has a different number of elements (local/remote: ${

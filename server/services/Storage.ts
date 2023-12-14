@@ -4,18 +4,22 @@ import * as fs from 'node:fs';
 import logger from '../utils/logger';
 import { Document, isDocument } from '../types';
 import { STORAGE_DIR, STORAGE_DOCUMENTS_PATH } from '../utils/config';
+import Messaging from './Messaging';
 
 const log = logger.child({ caller: 'Storage' });
 
 export default class Storage extends EventEmitter {
+  #messaging: Messaging | null;
+
   #documents: Document[] = [];
 
   #documentIDCount = 0;
 
   #initialized = false;
 
-  constructor() {
+  constructor(messaging: Messaging | null) {
     super();
+    this.#messaging = messaging;
     let documents: Document[] = [];
     try {
       const data = fs.readFileSync(STORAGE_DOCUMENTS_PATH, 'utf-8');
@@ -35,7 +39,9 @@ export default class Storage extends EventEmitter {
       Math.max(...documents.map((doc) => parseInt(doc.documentID, 10))) + 1;
     this.#documentIDCount = maxID > 0 ? maxID : 0;
     this.#initialized = true;
-    log.debug(this.#documents, 'Storage initialized - found these documents:');
+    log.info(this.#documents, 'storage initialized');
+    log.debug(this.#documents, 'found these documents:');
+    log.debug(this.#messaging); // TO SUPPRESS ESLINT ERROR!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   }
 
   static #isNodeError(error: unknown): error is NodeJS.ErrnoException {

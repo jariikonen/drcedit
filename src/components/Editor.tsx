@@ -59,6 +59,7 @@ function Editor() {
   }
 
   useEffect(() => {
+    /** A callback function for the registering message. */
     function registrationCallback(response: ServerResponse) {
       // apply the initial content update to current document state object
       if (!response.documentContent) {
@@ -93,40 +94,6 @@ function Editor() {
       registrationCallback
     );
   }, [editingServerData]);
-
-  const modules = {
-    toolbar: [
-      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-      [{ font: [] }],
-      [{ align: ['', 'center', 'right', 'justify'] }],
-      [{ list: 'ordered' }, { list: 'bullet' }],
-    ],
-    cursors: {
-      template: '<div class="custom-cursor">...</div>',
-      hideDelayMs: 5000,
-      hideSpeedMs: 0,
-      selectionChangeSource: null,
-      transformOnTextChange: true,
-    },
-    history: {
-      // Local undo shouldn't undo changes from remote users
-      userOnly: true,
-    },
-  };
-
-  const formats = [
-    'header',
-    'bold',
-    'italic',
-    'underline',
-    'strike',
-    'blockquote',
-    'bullet',
-    'font',
-    'align',
-    'list',
-  ];
 
   if (!yDocInitRef.current) {
     yDocRef.current.on(
@@ -168,6 +135,40 @@ function Editor() {
       setEditorValue(editor.getContents());
     }
   };
+
+  // settings for the Quill editor
+  const modules = {
+    toolbar: [
+      [{ header: [1, 2, 3, 4, 5, 6, false] }],
+      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+      [{ font: [] }],
+      [{ align: ['', 'center', 'right', 'justify'] }],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+    ],
+    cursors: {
+      template: '<div class="custom-cursor">...</div>',
+      hideDelayMs: 5000,
+      hideSpeedMs: 0,
+      selectionChangeSource: null,
+      transformOnTextChange: true,
+    },
+    history: {
+      // Local undo shouldn't undo changes from remote users
+      userOnly: true,
+    },
+  };
+  const formats = [
+    'header',
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'blockquote',
+    'bullet',
+    'font',
+    'align',
+    'list',
+  ];
 
   if (!editingServerData) {
     return <DocumentList setEditingServerData={setEditingServerData} />;

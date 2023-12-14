@@ -2,7 +2,8 @@
 import { EventEmitter } from 'node:events';
 import express, { Express, Router, Request } from 'express';
 import logger from '../utils/logger';
-import { HOST, GATEWAY_HTTP_PORT } from '../utils/config';
+import { GATEWAY_HTTP_PORT } from '../utils/config';
+import { HOST } from '../utils/networkinfo';
 import Storage from './Storage';
 import Editing from './Editing';
 
@@ -46,8 +47,12 @@ export default class Gateway extends EventEmitter {
       this.#storage
         .getDocuments()
         .then((documents) => {
-          log.info(documents, 'sending all documents');
-          res.send(documents);
+          const allWithoutDocumentState = documents.map((doc) => {
+            const { content, ...rest } = doc;
+            return rest;
+          });
+          log.info(allWithoutDocumentState, 'sending all documents');
+          res.send(allWithoutDocumentState);
         })
         .catch((error) => {
           if (error instanceof Error) log.error(error.stack);

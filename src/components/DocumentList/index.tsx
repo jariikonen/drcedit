@@ -34,6 +34,9 @@ function DocumentList({ setEditingServerData }: DocumentListProps) {
 
   useEffect(() => {
     const createDocument = async (documentName: string) => {
+      console.log(
+        `requesting the server to create a new document '${documentName}'`
+      );
       const serverData = await documentService.createDocument(documentName);
       if (!serverData) {
         throw new Error('invalid response from server - no serverData');

@@ -49,3 +49,7 @@ export function validAddress(str: string) {
     parseInt(m[4], 10) <= 255
   );
 }
+
+export const NETWORK_INFO = getNetworkInfo()[0];
+export const HOST = NETWORK_INFO.address;
+export const PRIORITY = getPriorityNumber(HOST, NETWORK_INFO.netmask);

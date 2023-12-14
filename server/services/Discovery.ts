@@ -3,14 +3,18 @@ import dgram from 'dgram';
 import { Buffer } from 'node:buffer';
 import { EventEmitter } from 'node:events';
 import {
-  NETWORK_INFO,
-  HOST,
   DISCOVERY_PORT,
   DISCOVERY_MESSAGE_INTERVAL,
   DISCOVERY_MESSAGE_TIMEOUT,
   DISCOVERY_PREELECTION_TIMEOUT,
-  PRIORITY,
 } from '../utils/config.ts';
+import {
+  NETWORK_INFO,
+  HOST,
+  PRIORITY,
+  getPriorityNumber,
+  validAddress,
+} from '../utils/networkinfo.ts';
 import logger from '../utils/logger.ts';
 import {
   CoordinatorMsgNodeInfo,
@@ -18,7 +22,6 @@ import {
   NodeList,
   isCoordinatorMsgNodeInfo,
 } from '../types.ts';
-import { getPriorityNumber, validAddress } from '../utils/networkinfo.ts';
 
 const log = logger.child({ caller: 'Discovery' });
 

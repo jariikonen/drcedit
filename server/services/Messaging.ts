@@ -2,7 +2,8 @@
 import { EventEmitter } from 'node:events';
 import { Server, Socket as ServerSocket } from 'socket.io';
 import { io, Socket } from 'socket.io-client';
-import { SOCKETIO_PORT_INTERNAL, HOST } from '../utils/config';
+import { SOCKETIO_PORT_INTERNAL } from '../utils/config';
+import { HOST } from '../utils/networkinfo';
 import logger from '../utils/logger';
 
 const log = logger.child({ caller: 'Messaging' });

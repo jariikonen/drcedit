@@ -1,3 +1,4 @@
+import { Socket } from 'socket.io';
 import * as Y from 'yjs';
 import { NetworkInterfaceInfoIPv4 } from 'os';
 
@@ -60,6 +61,10 @@ export function isDocument(obj: unknown): obj is Document {
   );
 }
 
+export interface ClientRegistration {
+  socket: Socket;
+}
+
 /** Used for recording documents on the Editing server. */
 export interface DocumentRegistration {
   /** Document to be registered. */
@@ -72,7 +77,7 @@ export interface DocumentRegistration {
   nodes: string[];
 
   /** List of clients (socket.io socket.ids) currently editing the document. */
-  clients: string[];
+  clients: ClientRegistration[];
 }
 
 /** Used for pointing the correct editing server to the client. */

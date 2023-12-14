@@ -2,7 +2,7 @@
 import { EventEmitter } from 'node:events';
 import logger from '../utils/logger';
 // import Discovery from './Discovery.ts';
-import { HOST } from '../utils/config.ts';
+import { HOST } from '../utils/networkinfo';
 
 const log = logger.child({ caller: 'LoadBalancing' });
 

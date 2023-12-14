@@ -3,24 +3,28 @@
 
 import { Server, Socket } from 'socket.io';
 import { EventEmitter } from 'node:events';
-// import * as Y from 'yjs';
+import * as Y from 'yjs';
 import logger from '../utils/logger.ts';
 import { DocumentRegistration, EditingServerData, Document } from '../types.ts';
-import { SOCKETIO_PORT, HOST } from '../utils/config.ts';
+import { GATEWAY_HTTP_PORT, SOCKETIO_PORT } from '../utils/config.ts';
+import { HOST } from '../utils/networkinfo.ts';
 import Storage from './Storage.ts';
 import LoadBalancing from './LoadBalancing.ts';
 
 const log = logger.child({ caller: 'Editing' });
 
-interface ServerResponse {
+export interface ServerResponse {
   code: number;
   message: string;
+  documentContent?: Uint8Array;
 }
 
 export default class Editing extends EventEmitter {
   static OK: 1000;
 
   static NOFILE = 1001;
+
+  static SRVERR = 1002;
 
   #ioServer: Server;
 
@@ -38,7 +42,7 @@ export default class Editing extends EventEmitter {
     super();
     this.#ioServer = new Server({
       cors: {
-        origin: `http://${gatewayAddress}:${SOCKETIO_PORT}`,
+        origin: `http://${gatewayAddress}:${GATEWAY_HTTP_PORT}`,
       },
     });
     this.#storage = storage;
@@ -50,7 +54,7 @@ export default class Editing extends EventEmitter {
 
   #initializeIoServer() {
     this.#ioServer.on('connection', async (socket: Socket) => {
-      log.info(`Connected with user: ${socket.id}`);
+      log.info(`connected with user: ${socket.id}`);
 
       await socket.join(socket.id);
 
@@ -71,15 +75,73 @@ export default class Editing extends EventEmitter {
             });
             return;
           }
-          // register client and add the socket to a document specific room
-          this.#documents[documentID].clients.push(socket.id);
-          await socket.join(documentID);
-          log.info(`responding to ${socket.id}: OK`);
 
+          // get document from storage and register it
+          const document = await this.#storage.getDocument(documentID);
+          if (!document) {
+            callback({
+              code: Editing.SRVERR,
+              message: `SERVER ERROR: no such file '${documentID}'`,
+            });
+            throw new Error(
+              `did not receive document '${documentID}' - this should not happen`
+            );
+          }
+          if (!document.content) document.content = new Y.Doc();
+          this.#documents[documentID].document = document;
+
+          // register the client to the document's record and join to a
+          // document-specific room on the messaging server
+          this.#documents[documentID].clients.push({ socket });
+          // await messaging.join(documentID);
+
+          // return OK with the initial document state
+          const update = Y.encodeStateAsUpdate(document.content);
+          log.info(`responding to ${socket.id}: OK`);
+          log.debug(update, 'OK response includes this initial update');
           callback({
             code: Editing.OK,
             message: 'OK',
+            documentContent: update,
           });
+        }
+      );
+
+      socket.on(
+        'update',
+        (
+          update: Uint8Array,
+          count: string,
+          clientID: number,
+          documentID: string
+        ) => {
+          log.info(
+            `received update '${count}' to document '${documentID}' from client '${clientID}'`
+          );
+
+          // apply the update to the state of this particular document
+          const documentState = this.#documents[documentID].document.content;
+          if (!documentState) {
+            throw new Error(
+              'SERVER ERROR: no document state - this should not happen'
+            );
+          }
+          Y.applyUpdate(
+            documentState,
+            new Uint8Array(update),
+            `${clientID}:${count}`
+          );
+          log.info(
+            `current document state: ${documentState.getText().toJSON()}`
+          );
+
+          // send the update to the other clients editing this document
+          const otherClients = this.#documents[documentID].clients.filter(
+            (c) => c.socket.id !== socket.id
+          );
+          otherClients.forEach((c) =>
+            c.socket.emit('update', update, count, clientID, documentID)
+          );
         }
       );
 

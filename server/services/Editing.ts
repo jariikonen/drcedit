@@ -47,12 +47,37 @@ export default class Editing extends EventEmitter {
     });
     this.#storage = storage;
     this.#messaging = messaging;
-    log.debug(this.#messaging); // TO SUPPRESS ESLINT ERROR!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    this.#initializeMessaging();
     this.#initializeIoServer();
   }
 
-  /* #addListenersToMessaging() {
-  } */
+  #initializeMessaging() {
+    const msging = this.#messaging;
+
+    if (!msging) return false;
+
+    if (!msging.isBroker()) msging.join('editing');
+
+    let count = 0;
+    setInterval(() => {
+      count += 1;
+      msging.sendToRoom(
+        'editing',
+        'editing',
+        'testi',
+        `tämä on viesti ${count} ${HOST}:lta`
+      );
+      msging.send('testi', `viesti ${HOST}`);
+    }, 1000);
+
+    msging.on('editing', (subEvent: string, message: string) => {
+      log.info(
+        `received an editing message with sub-event '${subEvent}':\n\t'${message}'`
+      );
+    });
+
+    return true;
+  }
 
   #initializeIoServer() {
     this.#ioServer.on('connection', async (socket: Socket) => {

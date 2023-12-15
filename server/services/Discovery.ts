@@ -359,7 +359,9 @@ export default class Discovery extends EventEmitter {
    */
   #addNodes(nodeList: MessageNodeInfo[]) {
     log.debug(this.#nodes, 'current known nodes:');
-    const addingForTheFirstTime = this.#nodes.length > 1;
+    const addingForTheFirstTime = !(this.#nodes.length > 1);
+
+    // check if there are new nodes
     let newNodes = false;
     nodeList.forEach((node) => {
       if (node.address === HOST) {
@@ -379,7 +381,10 @@ export default class Discovery extends EventEmitter {
         });
       }
     });
+
+    // get changes in roles
     const ownRoleChanged = this.#findRoles(nodeList);
+
     if (ownRoleChanged) {
       log.info('found a new role for self');
       this.emit('noles', JSON.parse(JSON.stringify(this.#nodes)));
@@ -396,8 +401,9 @@ export default class Discovery extends EventEmitter {
 
       this.emit('nodes', JSON.parse(JSON.stringify(this.#nodes)));
     }
-    if (addingForTheFirstTime)
+    if (addingForTheFirstTime && !ownRoleChanged) {
       this.emit('roles', JSON.parse(JSON.stringify(this.#nodes)), '#addNodes');
+    }
   }
 
   #findRoles(nodeList: MessageNodeInfo[]): boolean {
@@ -454,6 +460,11 @@ export default class Discovery extends EventEmitter {
     return false;
   }
 
+  /**
+   * Returns true if the node with the highest or lowest priority value is in
+   * the node list given as parameter. (Message broker node always has the
+   * highest priority and the gateway the lowest.)
+   */
   #isHighestOrLowestPriority(nodeList: MessageNodeInfo[]): boolean {
     if (this.#messageBroker && this.#gateway) {
       const value = Boolean(
@@ -520,6 +531,7 @@ export default class Discovery extends EventEmitter {
             `HELLO message content (sent):\n\t'${hello.toString('utf-8')}'`
           );
         }, DISCOVERY_MESSAGE_INTERVAL);
+
         // stop sending messages after a timeout
         this.#helloTimeout[remote.address] = setTimeout(() => {
           log.debug(

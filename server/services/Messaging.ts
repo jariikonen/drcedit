@@ -13,8 +13,13 @@ export default class Messaging extends EventEmitter {
 
   #client: Socket | null = null;
 
+  #broker: boolean;
+
   constructor(broker: boolean, brokerAddress: string | null = null) {
     super();
+
+    this.#broker = broker;
+
     // Messaging instance functions either as a Socket.io server
     if (broker) {
       log.info('starting a new message broker');
@@ -57,22 +62,29 @@ export default class Messaging extends EventEmitter {
       // passing the room name as parameter
       socket.on('join', async (room: string) => {
         await socket.join(room);
-        log.debug(
+        log.info(
           `added ${remoteHostAddress} (socket: ${socket.id}) to room ${room}`
         );
       });
 
       // clients can send messages to specific rooms by sending them as
       // 'toRoom' events
-      socket.on('toRoom', (room: string, event: string, message: string) => {
+      socket.on('toRoom', (room: string, event: string, ...args: unknown[]) => {
         log.debug(
-          `passing a message as '${event}' event to room '${room}': '${message}'`
+          `passing a message as '${event}' event to room '${room}':\n\t'${JSON.stringify(
+            args
+          )}'`
         );
-        socket.to(room).emit(event, message);
+        socket.to(room).emit(event, ...args);
+        if (room === 'editing') this.emit('editing', ...args);
       });
 
       socket.onAny((event, ...args) => {
-        log.debug(`received a message (${event}): ${JSON.stringify(args)}`);
+        log.debug(
+          `received a message (${event}):\n\t${JSON.stringify(
+            args
+          )}\n\t(broker: ${JSON.stringify(this.#broker)})`
+        );
       });
 
       socket.on('disconnect', (reason) => {
@@ -109,7 +121,16 @@ export default class Messaging extends EventEmitter {
     });
 
     this.#client.onAny((event, ...args) => {
-      log.info(`received a message (${event}): ${JSON.stringify(args)}`);
+      log.debug(`received a message (${event}):\n\t${JSON.stringify(args)}`);
+    });
+
+    this.#client.on('editing', (...args: unknown[]) => {
+      log.debug(
+        `received an editing message:\n\t${JSON.stringify(
+          args
+        )}\n\temitting as an editing event`
+      );
+      this.emit('editing', ...args);
     });
 
     this.#client.on('disconnection', (reason) => {
@@ -127,28 +148,34 @@ export default class Messaging extends EventEmitter {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  send(event: string, message: string) {
+  send(event: string, ...args: unknown[]) {
     const instance = this.#client ? this.#client : this.#server;
     if (!instance) {
       throw new Error('no Messaging instance');
     }
-    log.debug(`sending message as '${event}' event: '${message}'`);
-    instance.emit(event, message);
+    log.debug(
+      `sending message as '${event}' event:\n\t'${JSON.stringify(args)}'`
+    );
+    instance.emit(event, ...args);
   }
 
-  sendToRoom(room: string, event: string, message: string) {
+  sendToRoom(room: string, event: string, ...args: unknown[]) {
     if (this.#client) {
       log.debug(
-        `client sending message as '${event}' event to room '${room}': '${message}'`
+        `client sending message as '${event}' event to room '${room}':\n\t'${JSON.stringify(
+          args
+        )}'`
       );
-      this.#client.emit('toRoom', room, event, message);
+      this.#client.emit('toRoom', room, event, ...args);
       return;
     }
     if (this.#server) {
       log.debug(
-        `broker sending message as '${event}' event to room '${room}': '${message}`
+        `broker sending message as '${event}' event to room '${room}':\n\t'${JSON.stringify(
+          args
+        )}`
       );
-      this.#server.to(room).emit(event, message);
+      this.#server.to(room).emit(event, ...args);
       return;
     }
     throw new Error('no Messaging instance');
@@ -174,5 +201,9 @@ export default class Messaging extends EventEmitter {
         resolve('messaging client has closed');
       }
     });
+  }
+
+  isBroker() {
+    return this.#broker;
   }
 }

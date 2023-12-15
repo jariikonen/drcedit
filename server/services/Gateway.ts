@@ -148,6 +148,14 @@ export default class Gateway extends EventEmitter {
   }
 
   close() {
-    this.#expressInstance.close();
+    log.info('closing the gateway server');
+    return new Promise((resolve, reject) => {
+      this.#expressInstance.close((error) => {
+        if (error) {
+          reject(error);
+        }
+        resolve('gateway server has closed');
+      });
+    });
   }
 }

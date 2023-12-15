@@ -24,17 +24,17 @@ let currentRoles: Role[] = [];
 
 const discovery = new Discovery();
 
-function closeServices() {
+async function closeServices() {
   if (messaging) {
-    messaging.close();
+    await messaging.close();
     messaging = null;
   }
   if (gateway) {
-    gateway.close();
+    await gateway.close();
     gateway = null;
   }
   if (editing) {
-    editing.close();
+    await editing.close();
     editing = null;
   }
   loadBalancer = null;
@@ -69,22 +69,33 @@ discovery.on('nodes', (newNodes: NodeInfo[]) => {
 });
 
 discovery.on('roles', (newNodes: NodeInfo[], source: string) => {
-  log.info(`roles event (${source}):\n\t${JSON.stringify(newNodes)}`);
+  log.info(
+    `roles event (${source}):\n\t${JSON.stringify(
+      newNodes
+    )}\n\tcurrent roles: ${JSON.stringify(currentRoles)}`
+  );
 
   const roles = newNodes.find((node) => node.address === HOST)?.roles;
   if (!roles) throw new Error('no roles - this should not happen');
   if (roles !== currentRoles) {
     log.info(`assuming new role(s): ${JSON.stringify(roles)}`);
-    closeServices();
-    currentRoles = roles;
-    const brokerNode = newNodes.find((node) =>
-      node.roles.includes('MESSAGE_BROKER')
-    );
-    messageBrokerAddress = brokerNode ? brokerNode.address : null;
-    const gatewayAddress = roles.includes('GATEWAY')
-      ? HOST
-      : newNodes.find((node) => node.roles.includes('GATEWAY'))?.address;
-    startServices(brokerNode, gatewayAddress);
+
+    closeServices()
+      .then(() => {
+        currentRoles = roles;
+
+        const brokerNode = newNodes.find((node) =>
+          node.roles.includes('MESSAGE_BROKER')
+        );
+        messageBrokerAddress = brokerNode ? brokerNode.address : null;
+
+        const gatewayAddress = roles.includes('GATEWAY')
+          ? HOST
+          : newNodes.find((node) => node.roles.includes('GATEWAY'))?.address;
+
+        startServices(brokerNode, gatewayAddress);
+      })
+      .catch((error): void => log.error(error));
   }
 });
 

@@ -51,6 +51,9 @@ export default class Editing extends EventEmitter {
     this.#initializeIoServer();
   }
 
+  /* #addListenersToMessaging() {
+  } */
+
   #initializeIoServer() {
     this.#ioServer.on('connection', async (socket: Socket) => {
       log.info(`connected with user: ${socket.id}`);
@@ -144,19 +147,6 @@ export default class Editing extends EventEmitter {
         }
       );
 
-      /* socket.on('update', (update: Uint8Array, editor: number) => {
-        log.info('update', update, editor);
-        socket.emit('testi2');
-        const normal = this.#io.of('/');
-        normal.to(socket.id).emit('hello', 'toinen');
-      }); */
-
-      // socket.on('update', (update: Uint8Array, editor: number) => {
-      // Y.applyUpdate(ydoc, update);
-      // console.log('socket', editor);
-      // console.log('ydoc.getText().toJSON()', ydoc.getText().toJSON());
-      // });
-
       socket.on('disconnect', () => {
         logger.info(`[disconnect] Disconnected with user: ${socket.id}`);
       });
@@ -194,6 +184,11 @@ export default class Editing extends EventEmitter {
 
   close() {
     log.info('closing editing server');
-    this.#ioServer.close();
+    return new Promise((resolve, reject) => {
+      this.#ioServer.close((error) => {
+        if (error) reject(error);
+        resolve('editing server has closed');
+      });
+    });
   }
 }

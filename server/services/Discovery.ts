@@ -382,8 +382,8 @@ export default class Discovery extends EventEmitter {
     const ownRoleChanged = this.#findRoles(nodeList);
     if (ownRoleChanged) {
       log.info('found a new role for self');
-      this.emit('noles', [...this.#nodes]);
-      this.emit('roles', [...this.#nodes], '#addNodes');
+      this.emit('noles', JSON.parse(JSON.stringify(this.#nodes)));
+      this.emit('roles', JSON.parse(JSON.stringify(this.#nodes)), '#addNodes');
     } else if (newNodes && this.#isHighestOrLowestPriority(nodeList)) {
       log.info('starting the pre-election timeout');
       if (this.#preElectionTimeout) {
@@ -394,10 +394,10 @@ export default class Discovery extends EventEmitter {
         this.#startElection();
       }, DISCOVERY_PREELECTION_TIMEOUT);
 
-      this.emit('nodes', [...this.#nodes]);
+      this.emit('nodes', JSON.parse(JSON.stringify(this.#nodes)));
     }
     if (addingForTheFirstTime)
-      this.emit('roles', [...this.#nodes], '#addNodes');
+      this.emit('roles', JSON.parse(JSON.stringify(this.#nodes)), '#addNodes');
   }
 
   #findRoles(nodeList: MessageNodeInfo[]): boolean {
@@ -751,8 +751,11 @@ export default class Discovery extends EventEmitter {
 
     // update nodes array and emit a NEW ROLES event
     this.#nodes = nodes;
-    log.debug(this.#nodes, 'updated the roles');
-    this.emit('roles', [...this.#nodes], '#setRoles');
+    log.debug(
+      this.#nodes,
+      'updated the roles locally and emitting a role event'
+    );
+    this.emit('roles', JSON.parse(JSON.stringify(this.#nodes)), '#setRoles');
   }
 
   #sendCoordinator() {
@@ -891,7 +894,11 @@ export default class Discovery extends EventEmitter {
 
     // update the node list and emit roles event
     this.#updateRoles(parsedMsg.nodeInfo);
-    this.emit('roles', [...this.#nodes], '#handleCoordinator');
+    this.emit(
+      'roles',
+      JSON.parse(JSON.stringify(this.#nodes)),
+      '#handleCoordinator'
+    );
   }
 
   #updateRoles(nodeData: MessageNodeInfo[]) {

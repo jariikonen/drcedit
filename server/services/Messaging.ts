@@ -154,15 +154,25 @@ export default class Messaging extends EventEmitter {
     throw new Error('no Messaging instance');
   }
 
-  close(): void {
+  close() {
     if (this.#server) {
       log.info('closing the messaging server');
-      this.#server?.close();
     }
     if (this.#client) {
       const clientSocketId = this.#client.id;
       this.#client?.disconnect();
       log.info(`closing the messaging client (socket ${clientSocketId})`);
     }
+    return new Promise((resolve, reject) => {
+      if (this.#server) {
+        this.#server?.close((error) => {
+          if (error) reject(error);
+          resolve('messaging server has closed');
+        });
+      }
+      if (this.#client) {
+        resolve('messaging client has closed');
+      }
+    });
   }
 }

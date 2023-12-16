@@ -4,12 +4,18 @@
 import { Server, Socket } from 'socket.io';
 import { EventEmitter } from 'node:events';
 import * as Y from 'yjs';
-import logger from '../utils/logger.ts';
-import { DocumentRegistration, Document, EditingNodesData } from '../types.ts';
-import { GATEWAY_HTTP_PORT, SOCKETIO_PORT } from '../utils/config.ts';
-import { HOST } from '../utils/networkinfo.ts';
-import Storage from './Storage.ts';
-import Messaging from './Messaging.ts';
+import logger from '../../utils/logger.ts';
+import {
+  DocumentRegistration,
+  Document,
+  EditingNodesData,
+} from '../../types.ts';
+import { GATEWAY_HTTP_PORT, SOCKETIO_PORT } from '../../utils/config.ts';
+import { HOST } from '../../utils/networkinfo.ts';
+import Storage from '../Storage.ts';
+import Messaging from '../Messaging.ts';
+import Consensus from './Consensus.ts';
+import Discovery from '../Discovery.ts';
 
 const log = logger.child({ caller: 'Editing' });
 
@@ -19,25 +25,58 @@ export interface ServerResponse {
   documentContent?: Uint8Array;
 }
 
+/**
+ * Editing service handles updating of the document states in a distributed
+ * fashion. In each instance the document state is held in a Yjs CRDT datatype
+ * Y.Doc, and the updates to the state are commutative, associative, and
+ * idempotent. This means that they can be applied in any order, and multiple
+ * times. All clients will sync up when they have received all of the updates.
+ * (https://docs.yjs.dev/api/document-updates)
+ *
+ * Editing service ensures that all instances of the service receive all of
+ * the updates by using the RAFT consensus algorithm, which is implemented in
+ * it's own module (see RAFT.ts). It communicates with the other instances by
+ * sending messages through the Messaging service (see Messaging.ts). When the service is started it joins into a room (Socket.io
+ * communication channel) 'editing', which enables broadcasting messages to
+ * all service instances in the room. After that it starts the leader election.
+ * Nodes (different service instances) turn themselves into candidates after
+ * a randomized period of time and send a message requesting for votes to be
+ * selected as the leader. When a node receives a vote request, it responds
+ * with OK if it hasn't given it's vote already, and if
+ *
+ */
 export default class Editing extends EventEmitter {
+  /** Response code - request succeeded. */
   static OK: 1000;
 
+  /** Response code - a file related to the request is missing. */
   static NOFILE = 1001;
 
+  /** Response code - internal server error. */
   static SRVERR = 1002;
 
+  /** Socket.io server for communicating with the client. */
   #ioServer: Server;
 
+  /** Local Storage service instance. */
   #storage: Storage;
 
-  #messaging: Messaging | null;
+  /** Local Messaging service instance. */
+  #messaging: Messaging | null = null;
 
+  #consensus: Consensus | null = null;
+
+  /**
+   * Register of documents under editing. Contains data about the documents,
+   * including the Y.Doc object containing the document state.
+   */
   #documents: Record<string, DocumentRegistration> = {};
 
   constructor(
     gatewayAddress: string,
     storage: Storage,
-    messaging: Messaging | null
+    messaging: Messaging | null,
+    discovery: Discovery
   ) {
     super();
     this.#ioServer = new Server({
@@ -47,15 +86,17 @@ export default class Editing extends EventEmitter {
     });
     this.#storage = storage;
     this.#messaging = messaging;
-    this.#initializeMessaging();
-    this.#initializeIoServer();
+    if (this.#messaging) {
+      this.#initializeMessaging();
+      this.#initializeIoServer();
+      this.#consensus = new Consensus(messaging, storage, discovery);
+      log.debug(this.#consensus); // JUST TO SUPPRESS ESLINT - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    }
   }
 
   #initializeMessaging() {
     const msging = this.#messaging;
-
-    if (!msging) return false;
-
+    if (!msging) throw new Error('no messaging service');
     if (!msging.isBroker()) msging.join('editing');
 
     let count = 0;
@@ -70,13 +111,13 @@ export default class Editing extends EventEmitter {
       msging.send('testi', `viesti ${HOST}`);
     }, 1000);
 
-    msging.on('editing', (subEvent: string, message: string) => {
+    msging.on('editing', (subEvent: string, ...args: unknown[]) => {
       log.info(
-        `received an editing message with sub-event '${subEvent}':\n\t'${message}'`
+        `received an editing message with sub-event '${subEvent}':\n\t'${JSON.stringify(
+          args
+        )}'`
       );
     });
-
-    return true;
   }
 
   #initializeIoServer() {

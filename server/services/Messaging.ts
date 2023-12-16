@@ -76,7 +76,11 @@ export default class Messaging extends EventEmitter {
           )}'`
         );
         socket.to(room).emit(event, ...args);
-        if (room === 'editing') this.emit('editing', ...args);
+
+        const validRooms = ['editing', 'consensus'];
+        if (validRooms.includes(room)) {
+          this.emit(room, ...args);
+        }
       });
 
       socket.onAny((event, ...args) => {

@@ -934,4 +934,8 @@ export default class Discovery extends EventEmitter {
       }
     });
   }
+
+  getNodeAddresses() {
+    return this.#nodes.map((n) => n.address);
+  }
 }

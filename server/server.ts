@@ -7,7 +7,7 @@ import Messaging from './services/Messaging.ts';
 import Storage from './services/Storage.ts';
 import Gateway from './services/Gateway.ts';
 import { NodeInfo, Role } from './types.ts';
-import Editing from './services/Editing.ts';
+import Editing from './services/Editing/index.ts';
 import LoadBalancing from './services/LoadBalancing.ts';
 import { DISCOVERY_PORT } from './utils/config.ts';
 
@@ -56,7 +56,7 @@ function startServices(
   storage = new Storage(messaging);
 
   if (gatewayAddress) {
-    editing = new Editing(gatewayAddress, storage, messaging);
+    editing = new Editing(gatewayAddress, storage, messaging, discovery);
     if (gatewayAddress === HOST) {
       loadBalancer = new LoadBalancing(discovery);
       gateway = new Gateway(storage, editing, loadBalancer);

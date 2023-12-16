@@ -1,18 +1,42 @@
 import { EventEmitter } from 'node:events';
-// import * as Y from 'yjs';
 import logger from '../../utils/logger';
 import { HOST } from '../../utils/networkinfo';
 import Messaging from '../Messaging';
-import Storage from '../Storage';
 import Discovery from '../Discovery';
+import { CONSENSUS_ELMAX, CONSENSUS_ELMIN } from '../../utils/config';
+import { NodeInfo } from '../../types';
 
 export type NodeStatus = 'FOLLOWER' | 'CANDIDATE' | 'LEADER';
 
 export interface NodeState {
+  address: string;
   status: NodeStatus;
   term: number;
+  electionTerm?: number;
+  voted?: boolean;
+  votes?: number;
   nodes?: string[];
 }
+
+export interface ElectionState {
+  candidate: string;
+  term: number;
+  votes: string[];
+  denied: string[];
+  expired: boolean;
+}
+
+export function isElectionState(arg: unknown): arg is ElectionState {
+  return (
+    (arg as ElectionState).candidate !== undefined &&
+    (arg as ElectionState).term !== undefined &&
+    (arg as ElectionState).votes !== undefined &&
+    (arg as ElectionState).denied !== undefined &&
+    (arg as ElectionState).expired !== undefined
+  );
+}
+
+export type ElectionMessageType = 'VOTEME' | 'OK' | 'DENIED' | 'LEADER';
 
 const log = logger.child({ caller: 'Consensus' });
 
@@ -47,88 +71,260 @@ const log = logger.child({ caller: 'Consensus' });
  *
  */
 export default class Consensus extends EventEmitter {
-  #nodeStatus: NodeStatus = 'FOLLOWER';
+  #status: NodeStatus = 'FOLLOWER';
 
-  #term = 0;
+  #term: number;
 
-  #electionTimeoutLength: number;
-
-  #electionInterval: NodeJS.Timeout | null = null;
+  #leader: NodeState | null = null;
 
   #nodes: string[];
 
-  /** Local Storage service instance. */
-  #storage: Storage;
+  #electionTimeout: NodeJS.Timeout | null = null;
+
+  #electionState: Record<string, ElectionState | null> = {};
 
   /** Local Messaging service instance. */
   #messaging: Messaging | null;
 
   #discovery: Discovery;
 
-  constructor(
-    messaging: Messaging | null,
-    storage: Storage,
-    discovery: Discovery
-  ) {
+  constructor(messaging: Messaging | null, discovery: Discovery) {
     super();
-    this.#storage = storage;
     this.#messaging = messaging;
     this.#discovery = discovery;
-    this.#electionTimeoutLength = Math.random() * 150 + 150;
+
     this.#nodes = discovery.getNodeAddresses();
+    this.#term = 0; // THIS SHOULD BE PERSISTED TO FILE AND READ FROM THERE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    log.debug(this.#discovery, 'TO SUPPRESS ESLINT ERROR'); // JUST TO SUPPRESS ESLINT - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     if (this.#messaging) {
       this.#initializeMessaging();
-      this.#startLeaderElection();
-      log.info(
-        `Consensus starting with electionTimeoutLength = ${
-          this.#electionTimeoutLength
-        }`
-      );
+      this.#initializeDiscovery();
+      this.#startElection();
+      log.info(`Consensus started (nodes: ${JSON.stringify(this.#nodes)})`);
     } else {
-      log.info('Consensus started without messaging service');
+      log.info(
+        `Consensus started without messaging service (nodes: ${JSON.stringify(
+          this.#nodes
+        )})`
+      );
     }
-    log.debug(this.#electionInterval); // JUST TO SUPPRESS ESLINT - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    log.debug(this.#storage); // JUST TO SUPPRESS ESLINT - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    log.debug(this.#discovery); // JUST TO SUPPRESS ESLINT - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   }
 
   #initializeMessaging() {
     if (!this.#messaging) throw new Error('no messaging service');
     if (!this.#messaging.isBroker()) this.#messaging.join('consensus');
 
-    this.#messaging.on('consensus', (subEvent: string, ...args: unknown[]) => {
-      log.info(
-        `received a consensua message with sub-event '${subEvent}':\n\t'${JSON.stringify(
-          args
-        )}'`
-      );
-    });
-  }
-
-  #startLeaderElection() {
-    const msging = this.#messaging;
-    function electionTimeoutCallback() {
-      if (msging) {
-        msging.sendToRoom('consensus', 'consensus', `testi ${HOST}`);
+    this.#messaging.on(
+      'consensus',
+      (
+        subEvent: string,
+        messageType: ElectionMessageType,
+        nodeState: NodeState,
+        ...args: unknown[]
+      ) => {
+        switch (subEvent) {
+          case 'election':
+            log.debug(
+              `election message - ${messageType}, ${JSON.stringify(
+                nodeState
+              )}, ${JSON.stringify(args)}`
+            );
+            if (!isElectionState(args[0])) {
+              throw new Error('no election state in election message');
+            }
+            this.#handleElection(messageType, nodeState, args[0]);
+            break;
+          default:
+            throw new Error(
+              `ran out of options - ${subEvent}, ${messageType}, ${JSON.stringify(
+                nodeState
+              )}`
+            );
+        }
       }
-    }
-
-    this.#electionInterval = setTimeout(
-      electionTimeoutCallback,
-      this.#electionTimeoutLength
     );
   }
 
-  getState() {
+  #initializeDiscovery() {
+    this.#discovery.on('nodes', (newNodes: NodeInfo[]) => {
+      this.#nodes = newNodes.map((node) => node.address);
+      log.info(`new nodes: ${JSON.stringify(this.#nodes)}`);
+    });
+  }
+
+  #startElection() {
+    this.#status = 'CANDIDATE';
+    this.#term += 1;
+
+    const myState = { ...this.getSimpleState() };
+    const electionState: ElectionState = {
+      candidate: HOST,
+      term: this.#term,
+      votes: [HOST],
+      denied: [],
+      expired: false,
+    };
+    const msging = this.#messaging;
+
+    const electionTimeoutCallback = () => {
+      if (msging) {
+        log.debug(
+          `sending consensus message: 'VOTEME, ${JSON.stringify(
+            myState
+          )}, ${JSON.stringify(electionState)}`
+        );
+        msging.sendToRoom(
+          'consensus',
+          'consensus',
+          'election',
+          'VOTEME',
+          myState,
+          electionState
+        );
+      }
+    };
+
+    if (this.#electionTimeout) {
+      clearInterval(this.#electionTimeout);
+    }
+    const timeoutLength =
+      Math.random() * (CONSENSUS_ELMAX - CONSENSUS_ELMIN) + CONSENSUS_ELMIN;
+    log.debug(`starting election timeout with length ${timeoutLength}`);
+    this.#electionTimeout = setTimeout(electionTimeoutCallback, timeoutLength);
+  }
+
+  #handleElection(
+    messageType: ElectionMessageType,
+    nodeState: NodeState,
+    electionState: ElectionState
+  ) {
+    const { candidate } = electionState;
+
+    if (nodeState.term > this.#term) {
+      if (messageType === 'VOTEME') {
+        this.#sendElection('OK', this.getSimpleState(), {
+          ...electionState,
+          votes: [...electionState.votes, HOST],
+        });
+      }
+      this.#term = nodeState.term;
+      this.#status = 'FOLLOWER';
+      this.#electionState[candidate] = {
+        ...electionState,
+        expired: true,
+      };
+    }
+
+    switch (messageType) {
+      case 'VOTEME':
+        // send OK, if not already voted and not the leader of this term
+        if (!electionState.votes.includes(HOST) && this.#status !== 'LEADER') {
+          this.#electionState[candidate] = {
+            ...electionState,
+            votes: [...electionState.votes, HOST],
+          };
+          this.#sendElection(
+            'OK',
+            this.getSimpleState(),
+            this.#electionState[candidate]
+          );
+        }
+        break;
+      case 'OK':
+        // pass, if this election is not active
+        if (electionState.term < this.#term) {
+          break;
+        }
+
+        // add vote to the local state
+        this.#electionState[candidate] = { ...electionState };
+
+        // send LEADER, if this node is the candidate and there are enough votes
+        if (
+          candidate === HOST &&
+          electionState.votes.length > Math.ceil(this.#nodes.length / 2)
+        ) {
+          this.#status = 'LEADER';
+          const myState = this.getSimpleState();
+          this.#sendElection('LEADER', myState, this.#electionState[candidate]);
+          this.#leader = myState;
+          log.info(
+            `this node is the new leader:\n\t${JSON.stringify(
+              electionState
+            )},\n\t${JSON.stringify(myState)}`
+          );
+        }
+        break;
+      case 'LEADER':
+        // pass if this election is not active or the sender is already the leader
+        if (
+          electionState.term < this.#term ||
+          nodeState.address === this.#leader?.address
+        ) {
+          break;
+        }
+        // follow the leader
+        this.#status = 'FOLLOWER';
+        this.#term = nodeState.term;
+        this.#leader = nodeState;
+        log.info(
+          `${nodeState.address} declared itself as a leader (${JSON.stringify(
+            electionState
+          )})`
+        );
+        break;
+      case 'DENIED':
+        // pass if this election is not active
+        if (electionState.term < this.#term) {
+          break;
+        }
+        // add denial to the local state
+        this.#electionState[candidate] = { ...electionState };
+        break;
+      default:
+        throw new Error('ran out of options');
+    }
+  }
+
+  #sendElection(
+    messageType: ElectionMessageType,
+    nodeState: NodeState,
+    electionState: ElectionState | null
+  ) {
+    if (!electionState) {
+      throw new Error('no election state');
+    }
+    log.debug(
+      `sending consensus message: ${messageType}, ${JSON.stringify(
+        nodeState
+      )}, ${JSON.stringify(electionState)}`
+    );
+    this.#messaging?.sendToRoom(
+      'consensus',
+      'consensus',
+      'election',
+      messageType,
+      nodeState,
+      electionState
+    );
+  }
+
+  getSimpleState(): NodeState {
     return {
-      status: this.#nodeStatus,
+      address: HOST,
+      status: this.#status,
+      term: this.#term,
+    };
+  }
+
+  getFullState(): NodeState {
+    return {
+      address: HOST,
+      status: this.#status,
       term: this.#term,
       nodes: this.#nodes,
     };
   }
-
-  /* commitUpdate(update: Uint8Array, documentStateRef: Y.Doc) {
-
-  } */
 }

@@ -42,6 +42,7 @@ export default class Messaging extends EventEmitter {
         auth: {
           host: HOST,
         },
+        transports: ['websocket'],
       });
       this.#initClient();
     }
@@ -70,21 +71,17 @@ export default class Messaging extends EventEmitter {
       // clients can send messages to specific rooms by sending them as
       // 'toRoom' events
       socket.on('toRoom', (room: string, event: string, ...args: unknown[]) => {
-        log.debug(
+        log.trace(
           `passing a message as '${event}' event to room '${room}':\n\t'${JSON.stringify(
             args
           )}'`
         );
         socket.to(room).emit(event, ...args);
-
-        const validRooms = ['editing', 'consensus'];
-        if (validRooms.includes(room)) {
-          this.emit(room, ...args);
-        }
+        this.#handleRoomEvents(room, args, '#server.on("toRoom")');
       });
 
       socket.onAny((event, ...args) => {
-        log.debug(
+        log.trace(
           `received a message (${event}):\n\t${JSON.stringify(
             args
           )}\n\t(broker: ${JSON.stringify(this.#broker)})`
@@ -97,6 +94,14 @@ export default class Messaging extends EventEmitter {
     });
 
     this.#server?.listen(SOCKETIO_PORT_INTERNAL);
+  }
+
+  #handleRoomEvents(room: string, args: unknown[], source: string) {
+    const validRooms = ['editing', 'consensus'];
+    if (validRooms.includes(room)) {
+      log.trace(`emitting ${room} event (${JSON.stringify(args)}, ${source})`);
+      this.emit(room, ...args);
+    }
   }
 
   static #getRemoteHostFromHandshake(socket: ServerSocket): string {
@@ -124,17 +129,19 @@ export default class Messaging extends EventEmitter {
       log.info(`client connected (socket: ${this.#client?.id})`);
     });
 
-    this.#client.onAny((event, ...args) => {
-      log.debug(`received a message (${event}):\n\t${JSON.stringify(args)}`);
+    this.#client.onAny((event: string, ...args) => {
+      log.trace(`received a message (${event}):\n\t${JSON.stringify(args)}`);
+      this.#handleRoomEvents(event, args, '#client.onAny');
     });
 
     this.#client.on('editing', (...args: unknown[]) => {
-      log.debug(
-        `received an editing message:\n\t${JSON.stringify(
-          args
-        )}\n\temitting as an editing event`
-      );
+      log.trace(`received an editing message:\n\t${JSON.stringify(args)}`);
       this.emit('editing', ...args);
+    });
+
+    this.#client.on('consensus', (...args: unknown[]) => {
+      log.trace(`received a consensus message:\n\t${JSON.stringify(args)}`);
+      this.emit('consensus', ...args);
     });
 
     this.#client.on('disconnection', (reason) => {
@@ -157,7 +164,7 @@ export default class Messaging extends EventEmitter {
     if (!instance) {
       throw new Error('no Messaging instance');
     }
-    log.debug(
+    log.trace(
       `sending message as '${event}' event:\n\t'${JSON.stringify(args)}'`
     );
     instance.emit(event, ...args);
@@ -165,7 +172,7 @@ export default class Messaging extends EventEmitter {
 
   sendToRoom(room: string, event: string, ...args: unknown[]) {
     if (this.#client) {
-      log.debug(
+      log.trace(
         `client sending message as '${event}' event to room '${room}':\n\t'${JSON.stringify(
           args
         )}'`
@@ -174,7 +181,7 @@ export default class Messaging extends EventEmitter {
       return;
     }
     if (this.#server) {
-      log.debug(
+      log.trace(
         `broker sending message as '${event}' event to room '${room}':\n\t'${JSON.stringify(
           args
         )}`

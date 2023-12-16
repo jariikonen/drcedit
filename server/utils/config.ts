@@ -30,3 +30,15 @@ export const EDITING_NUM_OF_NODES = parseInt(
   `${process.env.EDITING_NUM_OF_NODES ?? 3}`,
   10
 );
+export const CONSENSUS_ELMIN = parseInt(
+  `${process.env.CONSENSUS_ELMIN ?? 150}`,
+  10
+);
+export const CONSENSUS_ELMAX = parseInt(
+  `${process.env.CONSENSUS_ELMAX ?? 600}`,
+  10
+);
+export const CONSENSUS_RESPTO = parseInt(
+  `${process.env.CONSENSUS_RESPTO ?? 1000}`,
+  10
+);

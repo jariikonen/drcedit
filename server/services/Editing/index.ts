@@ -89,7 +89,7 @@ export default class Editing extends EventEmitter {
     if (this.#messaging) {
       this.#initializeMessaging();
       this.#initializeIoServer();
-      this.#consensus = new Consensus(messaging, storage, discovery);
+      this.#consensus = new Consensus(messaging, discovery);
       log.debug(this.#consensus); // JUST TO SUPPRESS ESLINT - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     }
   }
@@ -98,18 +98,6 @@ export default class Editing extends EventEmitter {
     const msging = this.#messaging;
     if (!msging) throw new Error('no messaging service');
     if (!msging.isBroker()) msging.join('editing');
-
-    let count = 0;
-    setInterval(() => {
-      count += 1;
-      msging.sendToRoom(
-        'editing',
-        'editing',
-        'testi',
-        `tämä on viesti ${count} ${HOST}:lta`
-      );
-      msging.send('testi', `viesti ${HOST}`);
-    }, 1000);
 
     msging.on('editing', (subEvent: string, ...args: unknown[]) => {
       log.info(

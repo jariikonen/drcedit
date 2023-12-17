@@ -3,7 +3,7 @@ import logger from '../../utils/logger';
 import { HOST } from '../../utils/networkinfo';
 import Messaging from '../Messaging';
 import Discovery from '../Discovery';
-import { CONSENSUS_ELMAX, CONSENSUS_ELMIN } from '../config/config';
+import { CONSENSUS_ELMAX, CONSENSUS_ELMIN } from '../../utils/config';
 import { NodeInfo } from '../../types';
 
 export type NodeStatus = 'FOLLOWER' | 'CANDIDATE' | 'LEADER';

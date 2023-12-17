@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { Server } from 'node:http';
 import express, { Express, Router, Request } from 'express';
 import logger from '../utils/logger';
-import { GATEWAY_HTTP_PORT } from './config/config';
+import { GATEWAY_HTTP_PORT } from '../utils/config';
 import { HOST } from '../utils/networkinfo';
 import Storage from './Storage';
 import Editing from './Editing';

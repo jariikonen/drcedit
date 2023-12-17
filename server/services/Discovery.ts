@@ -7,7 +7,7 @@ import {
   DISCOVERY_MESSAGE_INTERVAL,
   DISCOVERY_MESSAGE_TIMEOUT,
   DISCOVERY_PREELECTION_TIMEOUT,
-} from './config/config.ts';
+} from '../utils/config.ts';
 import {
   NETWORK_INFO,
   HOST,

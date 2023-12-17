@@ -9,7 +9,7 @@ import Gateway from './services/Gateway.ts';
 import { NodeInfo, Role } from './types.ts';
 import Editing from './services/Editing/index.ts';
 import LoadBalancing from './services/LoadBalancing.ts';
-import { DISCOVERY_PORT } from './services/config/config.ts';
+import { DISCOVERY_PORT } from './utils/config.ts';
 
 const log = logger.child({ caller: 'server' });
 

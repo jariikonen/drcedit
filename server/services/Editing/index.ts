@@ -10,7 +10,7 @@ import {
   Document,
   EditingNodesData,
 } from '../../types.ts';
-import { GATEWAY_HTTP_PORT, SOCKETIO_PORT } from '../config/config.ts';
+import { GATEWAY_HTTP_PORT, SOCKETIO_PORT } from '../../utils/config.ts';
 import { HOST } from '../../utils/networkinfo.ts';
 import Storage from '../Storage.ts';
 import Messaging from '../Messaging.ts';

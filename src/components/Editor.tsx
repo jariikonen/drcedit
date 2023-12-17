@@ -8,7 +8,7 @@ import Typography from '@mui/material/Typography';
 import DocumentList from './DocumentList';
 import { EditingServerData } from '../../server/types';
 import { ServerResponse } from '../../server/services/Editing';
-import { SOCKETIO_PORT } from '../../server/utils/config';
+import { SOCKETIO_PORT } from '../../server/services/config/config';
 
 Quill.register('modules/cursors', QuillCursors);
 

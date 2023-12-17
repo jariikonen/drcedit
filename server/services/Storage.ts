@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import logger from '../utils/logger';
 import { Document, isDocument } from '../types';
-import { STORAGE_DIR, STORAGE_DOCUMENTS_PATH } from '../utils/config';
+import { STORAGE_DIR, STORAGE_DOCUMENTS_PATH } from './config/config';
 import Messaging from './Messaging';
 
 const log = logger.child({ caller: 'Storage' });

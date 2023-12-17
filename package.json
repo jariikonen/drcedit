@@ -9,6 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "server": "tsx server/server.ts | npx pino-pretty",
+    "server-no-pino": "tsx server/server.ts",
     "production": "tsc && vite build && tsx server/server.ts | npx pino-pretty",
     "production-no-pino": "tsc && vite build && tsx server/server.ts",
     "clear-storage": "rm -rf storage"

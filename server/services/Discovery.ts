@@ -7,7 +7,7 @@ import {
   DISCOVERY_MESSAGE_INTERVAL,
   DISCOVERY_MESSAGE_TIMEOUT,
   DISCOVERY_PREELECTION_TIMEOUT,
-} from '../utils/config.ts';
+} from './config/config.ts';
 import {
   NETWORK_INFO,
   HOST,
@@ -43,7 +43,7 @@ interface DiscoveryParseResult {
 }
 
 /**
- * Discovery server is takes care of finding other nodes within the same
+ * Discovery server takes care of finding other nodes within the same
  * subnetwork. It sends JOIN messages as UDP datagrams to the broadcast address
  * of the subnetwork and listens for incomming messages. Nodes should respond
  * to JOIN with a HELLO message which contains a list of nodes the sender

@@ -4,7 +4,7 @@ import logger from '../utils/logger';
 import Discovery from './Discovery';
 import { HOST } from '../utils/networkinfo';
 import { EditingNodesData, NodeInfo } from '../types';
-import { EDITING_NUM_OF_NODES } from '../utils/config';
+import { EDITING_NUM_OF_NODES } from './config/config';
 
 const log = logger.child({ caller: 'LoadBalancing' });
 

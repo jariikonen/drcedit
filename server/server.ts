@@ -1,5 +1,4 @@
 /* eslint-disable import/extensions */
-
 import logger from './utils/logger.ts';
 import { HOST } from './utils/networkinfo.ts';
 import Discovery from './services/Discovery.ts';

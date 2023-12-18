@@ -36,13 +36,14 @@ export interface ServerResponse {
  * Editing service ensures that all instances of the service receive all of
  * the updates by using the RAFT consensus algorithm, which is implemented in
  * it's own module (see RAFT.ts). It communicates with the other instances by
- * sending messages through the Messaging service (see Messaging.ts). When the service is started it joins into a room (Socket.io
- * communication channel) 'editing', which enables broadcasting messages to
- * all service instances in the room. After that it starts the leader election.
- * Nodes (different service instances) turn themselves into candidates after
- * a randomized period of time and send a message requesting for votes to be
- * selected as the leader. When a node receives a vote request, it responds
- * with OK if it hasn't given it's vote already, and if
+ * sending messages through the Messaging service (see Messaging.ts). When the
+ * service is started it joins into a room (Socket.io communication channel)
+ * 'editing', which enables broadcasting messages to all service instances in
+ * the room. After that it starts the leader election. Nodes (different service
+ * instances) turn themselves into candidates after a randomized period of time
+ * and send a message requesting for votes to be selected as the leader. When a
+ * node receives a vote request, it responds with OK if it hasn't given it's
+ * vote already, and if
  *
  */
 export default class Editing extends EventEmitter {

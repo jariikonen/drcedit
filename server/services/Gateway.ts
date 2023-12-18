@@ -30,6 +30,7 @@ export default class Gateway extends EventEmitter {
     this.#storage = storage;
     this.#editing = editing;
     this.#loadBalancer = loadBalancer;
+    log.trace(this.#loadBalancer, 'JUST TO SUPPRESS THE ESLINT ERROR'); // JUST TO SUPPRESS THE ESLINT ERROR - REMOVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     this.#app = express();
 
@@ -47,6 +48,10 @@ export default class Gateway extends EventEmitter {
   #initializeDocumentRouter(): Router {
     const router = express.Router();
 
+    /**
+     * A request to get all the documents, to which the server responds with
+     * a list of the documents containing their names and ids.
+     */
     router.get('/', (req, res) => {
       log.debug(
         req,
@@ -74,6 +79,10 @@ export default class Gateway extends EventEmitter {
       };
     }
 
+    /**
+     * A request to create a new document, to which the server responds with
+     * editing server data that contains the editing server address.
+     */
     router.post('/', (req: CreateRequest, res) => {
       if (!req.body.documentName) {
         throw new Error('invalid request - no document name');
@@ -103,6 +112,11 @@ export default class Gateway extends EventEmitter {
       };
     }
 
+    /**
+     * A request to assign a document to the editing servers to be edited, to
+     * which the server responds with editing server data that contains the
+     * editing server address.
+     */
     router.get('/edit/:id', (req: EditRequest, res) => {
       const { id } = req.params;
       log.debug(
@@ -130,6 +144,7 @@ export default class Gateway extends EventEmitter {
     return router;
   }
 
+  /** Returns the editing server data to be forwarded to the client. */
   #getEditingNode(document: Document): EditingServerData {
     const contactNode = this.#editing.getContactNode(document);
     if (contactNode) {
@@ -139,7 +154,9 @@ export default class Gateway extends EventEmitter {
         documentName: document.documentName,
       };
     }
-    const editingNodesData = this.#loadBalancer.getEditingNodes();
+    // const editingNodesData = this.#loadBalancer.getEditingNodes();
+    const editingNodesData = LoadBalancing.getEditingNodes();
+    this.#editing.assignNodes(document, editingNodesData);
     return {
       contactNode: editingNodesData.clientContactNode,
       documentID: document.documentID,
